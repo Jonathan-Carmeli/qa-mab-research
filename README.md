@@ -16,7 +16,19 @@ Each agent independently learns which route is best using softmax + exponential 
 ### QA-MAB (Centralized)
 A central server builds a QUBO (Quadratic Unconstrained Binary Optimization) from estimated utilities and interference, then solves it via Simulated Annealing (proxy for real Quantum Annealing). The QUBO encodes the global optimization problem.
 
-## Key Results
+## Key Results (T=1000, 20 runs)
+
+| N | NB3R | QA-MAB | Δ | significance |
+|---|------|--------|---|---|
+| 5 | +2.84 | +2.29 | -0.55 | NB3R wins |
+| 10 | +0.79 | +0.68 | -0.11 | NS |
+| **12** | **-1.51** | **-1.11** | **+0.40** | **QA-MAB wins** |
+| 15 | -6.65 | -5.80 | +0.85 | QA-MAB wins |
+| 20 | -19.41 | -16.97 | +2.44 | QA-MAB wins |
+| 30 | -60.52 | -54.66 | +5.86 | QA-MAB wins |
+| 50 | -201.76 | -186.80 | +14.96 | QA-MAB wins |
+
+**Crossover at N≈12** (p<0.001). Advantage grows with N.
 
 ### Crossover at N ≈ 12
 - **N ≤ 10:** NB3R wins — direct feedback + coordinate ascent is sufficient
