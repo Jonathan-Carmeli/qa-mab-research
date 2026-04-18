@@ -100,5 +100,5 @@ MIT
 
 ## Author
 
-Yehonatan Carmeli — BGU, Beer Sheva, Israel
-MSc Thesis: Finding ML algorithms that quantum computing can execute faster
+Jonathan Carmeli — BGU, Beer Sheva, Israel
+MSc Thesis: Finding algorithms that quantum computing can execute faster
