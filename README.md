@@ -6,7 +6,9 @@ Extension of the DIAMOND paper (arXiv:2303.15544).
 
 ## The Problem
 
-N agents in a network, each choosing 1 of m routes. Agents interfere with each other — choosing the same route degrades throughput. Goal: maximize Social Welfare (total throughput).
+N agents in a network, each choosing 1 of m routes. Agents interfere with each other — the throughput an agent receives depends on **which route they chose and which routes everyone else chose**. Each (agent, route) pair interacts with every other (agent, route) pair through a learned interference matrix. Goal: maximize Social Welfare (total throughput).
+
+> **Note:** Agents can choose any route — interference is route-pair-specific, not just "same route." Agent i on route k and agent j on route l have interference I[i,k,j,l], which is independently defined for every combination.
 
 ## Two Algorithms
 
