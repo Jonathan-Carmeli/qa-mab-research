@@ -1,0 +1,53 @@
+============================================================
+STOCHASTIC NOISE EXPERIMENT
+N=[5, 10, 15, 20], sigma=[0.0, 0.05, 0.1, 0.2, 0.5], T=1000, seeds=20
+============================================================
+
+--- N=5 ---
+  sigma=0.00: NB3R=2.5767±0.2158  QA-MAB=2.6931±0.2524  winner=TIE p=0.1349
+  sigma=0.05: NB3R=2.6694±0.2880  QA-MAB=2.8167±0.2532  winner=TIE p=0.1022
+  sigma=0.10: NB3R=2.6032±0.2604  QA-MAB=2.7651±0.3072  winner=TIE p=0.0878
+  sigma=0.20: NB3R=2.7943±0.3845  QA-MAB=2.9071±0.4239  winner=TIE p=0.3955
+  sigma=0.50: NB3R=2.2558±0.8688  QA-MAB=2.5695±0.8823  winner=TIE p=0.2765
+
+--- N=10 ---
+  sigma=0.00: NB3R=0.7947±0.4371  QA-MAB=1.0836±0.3412  winner=QA-MAB p=0.0289
+  sigma=0.05: NB3R=0.5393±0.4383  QA-MAB=0.7290±0.4918  winner=TIE p=0.2171
+  sigma=0.10: NB3R=0.5470±0.5892  QA-MAB=0.7992±0.6748  winner=TIE p=0.2274
+  sigma=0.20: NB3R=0.1891±0.8169  QA-MAB=0.4808±1.0690  winner=TIE p=0.3506
+  sigma=0.50: NB3R=0.5676±1.5268  QA-MAB=0.9495±1.4119  winner=TIE p=0.4284
+
+--- N=15 ---
+  sigma=0.00: NB3R=-6.9804±0.4928  QA-MAB=-5.7631±0.5551  winner=QA-MAB p=0.0000
+  sigma=0.05: NB3R=-7.0539±0.5531  QA-MAB=-5.7442±0.6311  winner=QA-MAB p=0.0000
+  sigma=0.10: NB3R=-6.8737±0.8182  QA-MAB=-5.8247±0.8911  winner=QA-MAB p=0.0005
+  sigma=0.20: NB3R=-7.0839±1.0220  QA-MAB=-6.0721±1.3321  winner=QA-MAB p=0.0124
+  sigma=0.50: NB3R=-8.0396±2.0610  QA-MAB=-7.1178±2.2466  winner=TIE p=0.1954
+
+--- N=20 ---
+  sigma=0.00: NB3R=-19.1256±0.6655  QA-MAB=-17.1349±0.8159  winner=QA-MAB p=0.0000
+  sigma=0.05: NB3R=-19.8005±0.8969  QA-MAB=-17.4500±0.8730  winner=QA-MAB p=0.0000
+  sigma=0.10: NB3R=-19.4645±0.9435  QA-MAB=-16.7283±0.9288  winner=QA-MAB p=0.0000
+  sigma=0.20: NB3R=-20.1523±1.3422  QA-MAB=-17.7964±1.2173  winner=QA-MAB p=0.0000
+  sigma=0.50: NB3R=-20.1122±2.2466  QA-MAB=-18.4371±2.2323  winner=QA-MAB p=0.0267
+
+--- Stability Test (N=15, T=2000) ---
+  sigma=0.00: std(W)=0.8841  std(u_hat)=0.2148
+  sigma=0.10: std(W)=0.8203  std(u_hat)=0.2201
+  sigma=0.30: std(W)=0.8005  std(u_hat)=0.2640
+  sigma=0.50: std(W)=0.9319  std(u_hat)=0.3227
+
+Raw results saved to /Users/jon_claw/qa-mab-research/simulations/results/stochastic_noise_experiment/raw_results.json
+
+Generating figures...
+  Saved /Users/jon_claw/qa-mab-research/simulations/results/stochastic_noise_experiment/summary_figures.png
+  Saved /Users/jon_claw/qa-mab-research/simulations/results/stochastic_noise_experiment/regret_curves_N15.png
+  Saved /Users/jon_claw/qa-mab-research/simulations/results/stochastic_noise_experiment/crossover_analysis.png
+
+Generating report...
+  Report saved to /Users/jon_claw/Thesis_brain/what-i-know/qa-mab-stochastic-noise-results.md
+  Figures copied to /Users/jon_claw/Thesis_brain/docs/stochastic_noise_experiment/
+
+✅ Experiment complete!
+
+Total runtime: 722.5s (12.0min)
