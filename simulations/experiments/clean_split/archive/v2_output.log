@@ -1,0 +1,8 @@
+=================================================================
+CLEAN SPLIT QUBO V2 — Joint Error Correction
+=================================================================
+
+PHASE A: Oracle I (env.I)
+  SW=0.1311 +/- 0.0497  B_err=0.0121
+
+PHASE B: Learned I (avg gap correction)
