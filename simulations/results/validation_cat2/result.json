@@ -1,0 +1,313 @@
+{
+  "category": 2,
+  "test": "qubo_optimality",
+  "n_seeds": 20,
+  "pass_threshold": 0.95,
+  "match_rate": 0.9,
+  "mean_gap": 0.0,
+  "std_gap": 0.0,
+  "passed": false,
+  "ties_are_not_failures": true,
+  "per_seed": [
+    {
+      "seed": 42,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        2,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        2,
+        0
+      ]
+    },
+    {
+      "seed": 43,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        1
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "seed": 44,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 45,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        1,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 46,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 47,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 48,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 49,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 50,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 51,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 52,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        3,
+        1
+      ],
+      "qubo_paths": [
+        0,
+        3,
+        1
+      ]
+    },
+    {
+      "seed": 53,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        1,
+        3,
+        0
+      ],
+      "qubo_paths": [
+        1,
+        3,
+        0
+      ]
+    },
+    {
+      "seed": 54,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 55,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        2,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 56,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        2,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 57,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 58,
+      "match": false,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "seed": 59,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "seed": 60,
+      "match": false,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "seed": 61,
+      "match": true,
+      "gap": 0.0,
+      "bf_paths": [
+        0,
+        0,
+        0
+      ],
+      "qubo_paths": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}
