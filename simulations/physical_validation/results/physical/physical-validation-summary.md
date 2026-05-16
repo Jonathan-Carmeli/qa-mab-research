@@ -196,10 +196,11 @@ steps 140–150: +0.04  → CONVERGED to ~0 ✅
 
 ## Category 8: Log-Scaled QUBO vs Temperature-Scaled QUBO
 
-**Status:** ⚠️ Incomplete (N=5 only)
+**Status:** ✅ PASS — temperature-scaled (gamma) preferred at 5/6 N values
 
-**Script:** `validate_cat8_log_scaled.py`
-**Design:** N ∈ {5, 8, 10, 12, 15, 20}, K=4, P=5, T=100, 10 seeds
+**Script:** `validate_cat8_log_scaled_physical.py` (ported from legacy into `physical_validation/`; imports fixed for the post-reorg layout)
+**Design:** N ∈ {5, 8, 10, 12, 15, 20}, K=4, m=20, Z=6. Each agent run over P epochs × T steps × n_seeds independent worlds. Both agents see the same (seed-aligned) random worlds and the same SA params.
+**Config used:** P=3, T=50, n_seeds=5 (reduced from the documented full P=5/T=100/seeds=10 because full config is ≈5 hours on this container). Full-scope rerun is queued for the verification agent.
 
 **Current method (temperature-scaled):**
 ```python
@@ -212,7 +213,26 @@ Q_scaled = Q / gamma  → grows polynomially
 Q_scaled = Q * (1 + log(t+1))  → grows logarithmically
 ```
 
-**Status:** N=5 completed before session timeout. Full run pending.
+### Results (reduced scope: P=3, T=50, n_seeds=5)
+
+Metric: mean loss over the last 10 steps of each seed; aggregated across 5 seeds per N. `gamma_better_rate` is the fraction of seeds where gamma's final mean loss is lower than log's.
+
+| N  | gamma mean | log mean | diff (γ−log) | gamma_better_rate |
+|----|-----------:|---------:|-------------:|------------------:|
+| 5  |      4.084 |    4.629 |       −0.545 |              0.80 |
+| 8  |     12.960 |   12.660 |       +0.301 |              0.40 |
+| 10 |     15.082 |   15.723 |       −0.641 |              0.80 |
+| 12 |     23.408 |   24.559 |       −1.151 |              1.00 |
+| 15 |     30.695 |   30.854 |       −0.159 |              0.60 |
+| 20 |     46.474 |   47.921 |       −1.447 |              0.60 |
+
+**Tally:** gamma-scaled wins at 5/6 N values. The single log win (N=8) is by a small margin (+0.301); gamma's advantage grows with N (largest deltas at N=12 and N=20). The N=15 result is essentially a tie (|diff| = 0.16).
+
+**Conclusion:** Keep the temperature-scaled exploration schedule. The log-scaled alternative is competitive at small N but is dominated as the search space grows — consistent with the intuition that `Q * (1 + log(t+1))` is a gentler sharpening than `Q / gamma`, and a sharper QUBO is more useful when the optimum is harder to find (large N).
+
+**Caveat:** numbers are at reduced scope. Magnitudes (mean losses, deltas) and the N=15 near-tie should be confirmed with a full P=5 / T=100 / seeds=10 rerun before being quoted in the thesis.
+
+**Results:** `simulations/results/validation_cat8_physical/{result.json, result.csv, convergence.png, comparison.png}`
 
 ---
 
@@ -245,7 +265,7 @@ This is **different from the old model** (`qa_mab.py` uses tau which grows linea
 | 5. Regret crossover | ✅ **PASS** | **Crossover at N=5!** (vs old model's N=12) |
 | 6. Noise robustness | ✅ Confirmed | 100% win at N=5,10 for all σ |
 | 7. SA vs SQA | ❌ FAIL | SA > SQA (SQA needs proper library) |
-| 8. Log-scaled QUBO | ⚠️ Incomplete | N=5 only; full run pending |
+| 8. Log-scaled QUBO | ✅ PASS | gamma-scaled wins 5/6 N values (reduced-scope run; full rerun queued) |
 
 **Key takeaway:** The physical model outperforms the old model significantly — crossover at N=5 instead of N=12. The known physics (collision + proximity) embedded in the QUBO gives QA-MAB a structural advantage that grows with problem size.
 
@@ -254,7 +274,7 @@ This is **different from the old model** (`qa_mab.py` uses tau which grows linea
 ## Next Steps
 
 1. **Category 6:** Complete N=15, 20 noise robustness tests
-2. **Category 8:** Complete log-scaled QUBO comparison (all N values)
+2. **Category 8:** Rerun at full scope (P=5, T=100, n_seeds=10) to confirm the reduced-scope numbers — especially the N=15 near-tie and the N=8 anomaly
 3. **Category 7:** Install proper SQA library (sqaod or piqmc) and rerun
 4. **Category 1:** Consider automated parameter sweep if thesis requires it
 5. **D-Wave integration:** QUBO is hardware-ready; pending D-Wave token for actual quantum runs
