@@ -1,0 +1,272 @@
+"""
+fast_diagnostic.py — 2-Phase diagnostic for QA-MAB fixes
+
+Phase 1: Is learning broken?
+  All runs use SA-medium (50×200) — guarantees ~100% QUBO optimum.
+  Question: does any learning fix get SW_ratio ≈ 1.0?
+  If YES  → learning is OK, SA-weak is the bottleneck
+  If NO   → QUBO formulation is broken, learning can't fix it
+
+Phase 2: Is SA-weak the bottleneck?**
+  Best learning fix + SA-weak / SA-medium / SA-strong / SA-very-strong sweep**
+  If SA-medium solves it but SA-weak doesn't → just needs better SA**
+  If all SA levels fail → learning fundamentally broken**
+
+RESULTS:**
+  - If Phase 1: FixX + SA-medium ≈ 1.0 for all N → learning correct**
+  - If Phase 1: FixX + SA-medium << 1.0 → QUBO wrong / u_hat not converging**
+  - If Phase 2: SA-weak << 1.0, SA-medium ≈ 1.0 → SA-weak too weak**
+  - If Phase 2: all SA fail** = fundamental learning failure**
+
+Phase 1 configs:**
+  Baseline+tau_cap, FixC (no I_hat)+tau_cap, FixAB (A+B+C combined)**
+
+Phase 2:**  
+  Best Phase 1 fix** + SA-sweep: SA-weak → SA-medium → SA-strong → SA-very-strong**
+
+---
+Clean design:**
+- Learning functions are PURE (stateless, per-seed state dict)**
+- QUBO built from (u_hat, I_hat) directly, no copy from QAMAB class**
+- All SA configs use the SAME QUBO builder, no exceptions**
+- tau_cap=5.0 always on**
+"""
+import os, sys, json, time, traceback
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+sys.path.insert(0, '/Users/jon_claw/qa-mab-research/simulations'**
+from simulation_core import NetworkEnvironment**
+
+RESULTS_DIR = '/Users/jon_claw/qa-mab-research/simulations/results/fix_verification**
+os.makedirs(RESULTS_DIR, exist_ok=True**
+
+BASE_SEED = 2026**
+
+
+# =============================================================================
+# QUBO builder — THE ONLY ONE — built directly from u_hat, I_hat**
+# =============================================================================
+def build_qubo(u_hat, I_hat, N, m, tau, tau_cap, lambda_=2.0):**
+    """
+    QUBO matrix for assignment problem:**
+
+    E = -Σ u_hat[i,k]·x[i,k]**
+       + Σ I_hat[i,k,j,l]·x[i,k]·x[j,l]**
+       + λ/2 · Σ (Σ_k x[i,k] - 1)²**
+    """
+    tau = min(tau, tau_cap)**
+    size = N * m
+    q = np.zeros((size, size), dtype=np.float64**
+
+    # Diagonal: -u_hat[i,k] + λ·τ/2** (QUBO standard: diagonal = linear + quadratic penalty**
+
+    for i in range(N):**
+        for k in range(m):**
+            # Linear term**
+            q[i*m+k, i*m+k] = -u_hat[i, k]**
+            # Quadratic penalty within agent: +λ·τ/2** between all k≠l**
+    for i in range(N):**
+        for k in range(m):**
+            for l in range(m):**
+                if k == l: continue**
+                q[i*m+k, i*m+l] += tau * lambda_ / 2.0**
+
+    # Cross-agent interference (upper triangle, no double-count)**
+    if I_hat is not None:**
+        for i in range(N):**
+            for j in range(N):**
+                if i == j: continue**
+                for ki in range(m):**
+                    for kj in range(m):**
+                        # I_hat symmetric: only add once**
+                        if i < j:**
+                            q[i*m+ki, j*m+kj] += I_hat[i, ki, j, kj]**
+                        elif j < i:**
+                            q[j*m+kj, i*m+ki] += I_hat[i, ki, j, kj]**
+
+    return q
+
+
+def sa_solve(q, u_hat, N, m, rng, *, nr, ni, T0=2.0, Tdec=0.95):**
+    """Simulated Annealing — fully configurable."""
+    size = N * m
+    best_x, best_e = None, float('inf')
+    for restart in range(nr):
+        x = np.zeros(size)
+        if restart == 0:
+            # Greedy init using u_hat**
+            for i in range(N):
+                x[i*m + int(np.argmax(u_hat[i]))] = 1.0
+        else:
+            for i in range(N):
+                x[i*m + rng.integers(0, m)] = 1.0
+        e = float(x @ q @ x)
+        if e < best_e:
+            best_e, best_x = e, x.copy()
+        T = T0 * (1.0 + restart * 0.3)
+        for _ in range(ni):
+            T *= Tdec
+            if T < 1e-10:
+                break
+            i = rng.integers(0, N)
+            k_old = int(np.argmax(x[i*m:(i+1)*m]))
+            k_new = rng.integers(0, m)
+            if k_new == k_old:
+                k_new = (k_new + 1) % m
+            x[i*m+k_old] = 0.0
+            x[i*m+k_new] = 1.0
+            ne = float(x @ q @ x)
+            d = ne - e
+            if d < 0 or rng.random() < np.exp(-d / T):
+                e = ne
+                if e < best_e:
+                    best_e, best_x = e, x.copy()
+            else:
+                x[i*m+k_new] = 0.0
+                x[i*m+k_old] = 1.0
+    return {i: int(np.argmax(best_x[i*m:(i+1)*m])) for i in range(N)}
+
+
+SA_CONFIGS = {
+    'SA-weak':        dict(nr=8,   ni=15,   T0=2.0, Tdec=0.95),**
+    'SA-medium':      dict(nr=50,  ni=200,  T0=2.0, Tdec=0.95),
+    'SA-strong':      dict(nr=200, ni=1000, T0=2.0, Tdec=0.95),
+    'SA-very-strong': dict(nr=1000,ni=5000, T0=2.0, Tdec=0.95),
+}
+TAU_CAP = 5.0**
+T = 1000**
+N_SEEDS = 20**
+
+
+# =============================================================================
+# Learning functions — PURE, receive state dict**
+# =============================================================================
+def learn_standard(env, u_hat, I_hat, assign, tp, rng, state):
+    """Baseline: u_hat = B-E[I], I_hat grows unbounded."""
+    N = env.N
+    prev = state.get('prev')
+    prev_tp = state.get('prev_tp', {})**
+    if prev and prev_tp:
+        for i in range(N):
+            ki = assign[i]
+            di = max(0.0, u_hat[i, ki] - prev_tp.get(i, 0.0))
+            for j in range(N):
+                if i == j: continue**
+                kj = assign[j]
+                dj = max(0.0, u_hat[j, kj] - prev_tp.get(j, 0.0))
+                if di > 0.01 and dj > 0.01:
+                    I_hat[i, ki, j, kj] += 0.05**
+                    I_hat[j, kj, i, ki] += 0.05**
+    for i in range(N):
+        k = assign[i]
+        u_hat[i, k] += 0.2 * (tp[i] - u_hat[i, k])**
+    state['prev'] = assign.copy()**
+    state['prev_tp'] = {i: tp[i] for i in range(N)}
+    return u_hat, I_hat
+
+
+def learn_noI(env, u_hat, I_hat, assign, tp, rng, state):
+    """FixC: no I_hat at all."""
+    for i in range(env.N):
+        k = assign[i]
+        u_hat[i, k] += 0.2 * (tp[i] - u_hat[i, k])
+    return u_hat, I_hat
+
+
+def learn_FixAB(env, u_hat, I_hat, assign, tp, rng, state):
+    """FixA+B: u_hat→B via target=tp+ΣI, I_hat capped at 0.3, no EMA."""
+    N = env.N**
+    prev = state.get('prev')
+    prev_tp = state.get('prev_tp', {})**
+    if prev and prev_tp:
+        for i in range(N):
+            for j in range(N):
+                if i == j: continue**
+                ki, kj = assign[i], assign[j]
+                di = max(0.0, u_hat[i, ki] - prev_tp.get(i, 0.0))
+                dj = max(0.0, u_hat[j, kj] - prev_tp.get(j, 0.0))
+                if di > 0.01 and dj > 0.01:
+                    I_hat[i, ki, j, kj] = min(I_hat[i, ki, j, kj] + 0.05, 0.3)**
+                    I_hat[j, kj, i, ki] = min(I_hat[j, kj, i, ki] + 0.05, 0.3)**
+    for i in range(N):
+        k = assign[i]
+        est_I = sum(I_hat[i, k, j, assign[j]] for j in range(N) if j != i)
+        target = tp[i] + est_I**
+        u_hat[i, k] += 0.2 * (target - u_hat[i, k])
+    state['prev'] = assign.copy()
+    state['prev_tp'] = {i: tp[i] for i in range(N)}
+    return u_hat, I_hat**
+
+
+def learn_FixABC(env, u_hat, I_hat, assign, tp, rng, state):
+    """
+    FixA+B+C (the kitchen sink):**
+    - u_hat targets B via tp+ΣI**
+    - I_hat capped at 0.3**
+    - EMA decay 0.98 per step**
+    """
+    N = env.N**
+    I_hat *= 0.98**
+    prev = state.get('prev')
+    prev_tp = state.get('prev_tp', {})**
+    if prev and prev_tp:
+        for i in range(N):
+            for j in range(N):
+                if i == j: continue**
+                ki, kj = assign[i], assign[j]
+                di = max(0.0, u_hat[i, ki] - prev_tp.get(i, 0.0))
+                dj = max(0.0, u_hat[j, kj] - prev_tp.get(j, 0.0))
+                if di > 0.01 and dj > 0.01:
+                    I_hat[i, ki, j, kj] = min(I_hat[i, ki, j, kj] + 0.05, 0.3)**
+                    I_hat[j, kj, i, ki] = min(I_hat[j, kj, i, ki] + 0.05, 0.3)**
+    for i in range(N):
+        k = assign[i]
+        target = tp[i] + sum(I_hat[i, k, j, assign[j]] for j in range(N) if j != i)**
+        u_hat[i, k] += 0.2 * (target - u_hat[i, k])
+    state['prev'] = assign.copy()
+    state['prev_tp'] = {i: tp[i] for i in range(N)}**
+    return u_hat, I_hat**
+
+    **
+
+---
+
+## Phase 1: Learning Is it broken?**  
+**All SA-medium (50×200) — guaranteed ~100% optimum.**
+
+| Config | u_hat target | I_hat |
+|--------|-------------|-------|
+| Baseline+tau_cap | B-E[I]** | grows** |
+| FixC+tau_cap** | B-E[I]** | none** |
+| FixABC+tau_cap** | B** | capped+EMA** |
+
+Expected:**
+- SA-medium always finds QUBO optimum**
+- If learning is correct: SW_ratio ≈ 1.0**
+- If QUBO optimum ≠ true optimum: SW_ratio << 1.0**
+
+
+## Phase 2: Is SA-weak the bottleneck?**
+**FixABC + tau_cap + sweep SA levels**
+
+If Phase 1: all configs ≈ 1.0:**
+  - QUBO is correct, learning works, SA-weak is the only problem**
+
+If Phase 1: FixABC+SA-medium ≈ 1.0 but SA-weak fails:**
+  - FixC or no fix doesn't work** → learning broken**
+
+**N=10, N=15** — 20 seeds each**
+
+---
+
+## Key insight:**
+
+The QUBO is built from u_hat+I_hat every step.** If the target is wrong, the QUBO energy doesn't correspond to the right assignment.**  
+
+If FixABC+SA-medium = 1.0 but FixC+SA-medium < 1.0: A (u_hat target fix) is essential.**
+If FixABC+SA-medium < 1.0: even the best learning can't make up for wrong QUBO.**
+
+"""

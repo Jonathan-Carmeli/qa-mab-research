@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/Users/jon_claw/Thesis_brain/simulation/src/uav_routing/oracle_solver_gap.py", line 31, in <module>
+    from src.uav_routing.config import (
+        WorldConfig, GroundTruthConfig, QAMABConfig,
+    )
+ModuleNotFoundError: No module named 'src'

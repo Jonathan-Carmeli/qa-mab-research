@@ -1,0 +1,58 @@
+Config: P=30, T=100, seeds=10
+Starting P=30 experiment...
+  seed 1/10  agent=Random
+  seed 1/10  agent=Greedy
+  seed 1/10  agent=NB3R
+  seed 1/10  agent=QA-MAB
+  seed 1/10  agent=Oracle
+  seed 2/10  agent=Random
+  seed 2/10  agent=Greedy
+  seed 2/10  agent=NB3R
+  seed 2/10  agent=QA-MAB
+  seed 2/10  agent=Oracle
+  seed 3/10  agent=Random
+  seed 3/10  agent=Greedy
+  seed 3/10  agent=NB3R
+  seed 3/10  agent=QA-MAB
+  seed 3/10  agent=Oracle
+  seed 4/10  agent=Random
+  seed 4/10  agent=Greedy
+  seed 4/10  agent=NB3R
+  seed 4/10  agent=QA-MAB
+  seed 4/10  agent=Oracle
+  seed 5/10  agent=Random
+  seed 5/10  agent=Greedy
+  seed 5/10  agent=NB3R
+  seed 5/10  agent=QA-MAB
+  seed 5/10  agent=Oracle
+  seed 6/10  agent=Random
+  seed 6/10  agent=Greedy
+  seed 6/10  agent=NB3R
+  seed 6/10  agent=QA-MAB
+  seed 6/10  agent=Oracle
+  seed 7/10  agent=Random
+  seed 7/10  agent=Greedy
+  seed 7/10  agent=NB3R
+  seed 7/10  agent=QA-MAB
+  seed 7/10  agent=Oracle
+  seed 8/10  agent=Random
+  seed 8/10  agent=Greedy
+  seed 8/10  agent=NB3R
+  seed 8/10  agent=QA-MAB
+  seed 8/10  agent=Oracle
+  seed 9/10  agent=Random
+  seed 9/10  agent=Greedy
+  seed 9/10  agent=NB3R
+  seed 9/10  agent=QA-MAB
+  seed 9/10  agent=Oracle
+  seed 10/10  agent=Random
+  seed 10/10  agent=Greedy
+  seed 10/10  agent=NB3R
+  seed 10/10  agent=QA-MAB
+  seed 10/10  agent=Oracle
+  Saved /Users/jon_claw/qa-mab-research/simulations/results/uav_dynamic/p30_results/Random.npz
+  Saved /Users/jon_claw/qa-mab-research/simulations/results/uav_dynamic/p30_results/Greedy.npz
+  Saved /Users/jon_claw/qa-mab-research/simulations/results/uav_dynamic/p30_results/NB3R.npz
+  Saved /Users/jon_claw/qa-mab-research/simulations/results/uav_dynamic/p30_results/QA_MAB.npz
+  Saved /Users/jon_claw/qa-mab-research/simulations/results/uav_dynamic/p30_results/Oracle.npz
+Done in 2425.9s
