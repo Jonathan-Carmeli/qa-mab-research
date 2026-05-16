@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Cat 3: SA Solver Accuracy on physical model."""
+"""Cat 3: SA Solver Accuracy on physical model.
+
+SA sometimes returns sparse binary vectors (≠N ones). We always decode to valid
+paths and evaluate the QUBO energy of the decoded solution.
+"""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -7,19 +11,28 @@ import numpy as np
 import json, os, itertools
 from simulations.physical_env import AbstractWorld
 from simulations.qa_mab_physical import QAMABPhysical
-from simulations.sa_solver_physical import sa_solve
+from simulations.sa_solver_physical import sa_solve, decode_solution
 
 OUT = "simulations/results/validation_cat3_physical/"
 os.makedirs(OUT, exist_ok=True)
 
+def qubo_energy_of_paths(Q, paths, N, K):
+    """Energy E(x) where x is the one-hot encoding of chosen paths."""
+    x = np.zeros(N * K, dtype=int)
+    for n in range(N):
+        x[n * K + paths[n]] = 1
+    return float(x @ Q @ x)
+
 def brute_force_best(Q, N, K):
-    best_E, best_x = float('inf'), None
+    best_E = float('inf')
     for combo in itertools.product(range(K), repeat=N):
-        x = np.zeros(N*K, dtype=int)
-        for n in range(N): x[n*K + combo[n]] = 1
+        x = np.zeros(N * K, dtype=int)
+        for n in range(N):
+            x[n * K + combo[n]] = 1
         E = float(x @ Q @ x)
-        if E < best_E: best_E = E; best_x = x.copy()
-    return best_E, best_x
+        if E < best_E:
+            best_E = E
+    return best_E
 
 n_seeds = 30
 exact_hits = 0
@@ -35,8 +48,14 @@ for i in range(n_seeds):
     agent.world.refresh_epoch(agent.rng)
 
     Q = agent.build_qubo()
-    bf_E, _ = brute_force_best(Q, 3, 3)
-    sa_x, sa_E = sa_solve(Q, rng, n_reads=20, n_sweeps=200, T_init=2.0, T_final=0.05)
+    bf_E = brute_force_best(Q, 3, 3)
+
+    # SA returns raw energy (may be invalid sparse solution)
+    sa_x, _ = sa_solve(Q, rng, n_reads=20, n_sweeps=200, T_init=2.0, T_final=0.05)
+    # Decode to valid paths, then evaluate QUBO energy on valid one-hot vector
+    sa_paths = decode_solution(sa_x, 3, 3)
+    sa_E = qubo_energy_of_paths(Q, sa_paths, 3, 3)
+
     gap = sa_E - bf_E
     gaps.append(gap)
     if abs(gap) < 1e-6:
@@ -58,6 +77,8 @@ with open(OUT + "result.json", "w") as f:
 import csv
 with open(OUT + "result.csv", "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=["n_seeds","n_exact","win_rate","mean_gap","std_gap"])
-    w.writeheader(); w.writerow(result)
+    w.writeheader()
+    w.writerow({"n_seeds": n_seeds, "n_exact": exact_hits, "win_rate": rate,
+                "mean_gap": float(np.mean(gaps)), "std_gap": float(np.std(gaps))})
 
 print(f"Cat 3: {exact_hits}/{n_seeds} exact — {'PASS' if pass_cat3 else 'FAIL'}")
