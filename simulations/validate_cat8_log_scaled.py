@@ -110,8 +110,8 @@ for si in range(3):
 
 avg_qa = np.mean(ep_qa_all, axis=0); avg_log = np.mean(ep_log_all, axis=0)
 windows = 10
-rw_qa  = [float(np.mean(avg_qa[i*windows:(i+1)*windows])))  for i in range(len(avg_qa)//windows)]
-rw_log = [float(np.mean(avg_log[i*windows:(i+1)*windows]))) for i in range(len(avg_log)//windows)]
+rw_qa  = [float(np.mean(avg_qa[i*windows:(i+1)*windows]))   for i in range(len(avg_qa)//windows)]
+rw_log = [float(np.mean(avg_log[i*windows:(i+1)*windows]))   for i in range(len(avg_log)//windows)]
 
 pass_cat8 = True  # descriptive test, always pass
 result = {
