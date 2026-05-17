@@ -1,0 +1,39 @@
+{
+  "n_configs": 600,
+  "qubo_hits_optimum": 599,
+  "nb3r_best_hits_optimum": 322,
+  "nb3r_final_hits_optimum": 13,
+  "qubo_ge_nb3r_final": 600,
+  "qubo_ge_nb3r_best": 600,
+  "nb3r_T_bumped": 600,
+  "total_qubo_seconds": 302.00194907188416,
+  "total_nb3r_seconds": 603.2504658699036,
+  "benchmark_total_seconds": 1331.774062871933,
+  "config": {
+    "smoke": false,
+    "Ns": [
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "m": 4,
+    "B_scales": [
+      "uniform",
+      "skewed"
+    ],
+    "I_scales": [
+      "low",
+      "moderate",
+      "high"
+    ],
+    "n_seeds": 20,
+    "T_rounds": 5000,
+    "bumped_T_rounds": 10000,
+    "qubo_sa_n_restarts": 60,
+    "qubo_sa_n_iters": 2000,
+    "total_seconds": 1331.774062871933,
+    "n_records": 600
+  }
+}
