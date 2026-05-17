@@ -20,7 +20,7 @@ import sys
 import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-sys.path.insert(0, os.path.join(ROOT, "simulations"))
+sys.path.insert(0, os.path.join(ROOT, "simulations", "legacy"))
 sys.path.insert(0, os.path.join(ROOT, "simulations", "experiments"))
 
 from simulation_core import NetworkEnvironment  # noqa: E402
@@ -53,18 +53,25 @@ def run_one(N, B_scale, I_scale, seed, T_rounds):
 
     opt_sw, opt_assign = brute_force(env.B, env.I)
 
-    q_assign, q_sw, q_time = solve_diamond_qubo(env, seed=seed)
+    q_assign, q_sw, q_time = solve_diamond_qubo(
+        env, n_restarts=60, n_iters=2000, seed=seed
+    )
 
     _, n_hist, n_time = run_nb3r(env, T_rounds=T_rounds, seed=seed)
     used_T = T_rounds
     if not stable_tail(n_hist, frac=0.1, tol=0.01):
         _, n_hist, n_time = run_nb3r(env, T_rounds=BUMPED_T_ROUNDS, seed=seed)
         used_T = BUMPED_T_ROUNDS
-    n_sw = n_hist[-1][1]
+
+    sw_vals = [sw for _, sw in n_hist]
+    n_sw_final = sw_vals[-1]
+    n_sw_best = max(sw_vals)
+    tail_n = max(1, len(sw_vals) // 10)
+    n_sw_tail_mean = sum(sw_vals[-tail_n:]) / tail_n
 
     # Sanity asserts.
     assert q_sw <= opt_sw + 1e-9, f"qubo_sw {q_sw} > opt_sw {opt_sw}"
-    assert n_sw <= opt_sw + 1e-9, f"nb3r_sw {n_sw} > opt_sw {opt_sw}"
+    assert n_sw_best <= opt_sw + 1e-9, f"nb3r_sw_best {n_sw_best} > opt_sw {opt_sw}"
 
     return {
         "N": N,
@@ -76,7 +83,9 @@ def run_one(N, B_scale, I_scale, seed, T_rounds):
         "qubo_sw": q_sw,
         "qubo_assignment": [q_assign[i] for i in range(N)],
         "qubo_time": q_time,
-        "nb3r_sw": n_sw,
+        "nb3r_sw_final": n_sw_final,
+        "nb3r_sw_best": n_sw_best,
+        "nb3r_sw_tail_mean": n_sw_tail_mean,
         "nb3r_time": n_time,
         "nb3r_history": [[t, sw] for t, sw in n_hist],
         "nb3r_T_rounds": used_T,
@@ -122,7 +131,10 @@ def main():
         done += 1
         print(f"[{done}/{total}] N={N} B={B_scale} I={I_scale} seed={seed}  "
               f"opt={rec['opt_sw']:.4f}  qubo={rec['qubo_sw']:.4f}  "
-              f"nb3r={rec['nb3r_sw']:.4f}  T={rec['nb3r_T_rounds']}  "
+              f"nb3r_final={rec['nb3r_sw_final']:.4f}  "
+              f"nb3r_best={rec['nb3r_sw_best']:.4f}  "
+              f"nb3r_tail={rec['nb3r_sw_tail_mean']:.4f}  "
+              f"T={rec['nb3r_T_rounds']}  "
               f"qt={rec['qubo_time']*1000:.0f}ms  nt={rec['nb3r_time']*1000:.0f}ms")
 
     payload = {
@@ -135,6 +147,8 @@ def main():
             "n_seeds": n_seeds,
             "T_rounds": T_rounds,
             "bumped_T_rounds": BUMPED_T_ROUNDS,
+            "qubo_sa_n_restarts": 60,
+            "qubo_sa_n_iters": 2000,
             "total_seconds": float(time.time() - grand_start),
             "n_records": len(records),
         },
