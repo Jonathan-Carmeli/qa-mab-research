@@ -55,13 +55,19 @@ class QAMABPhysical:
 
     # ─── Epoch lifecycle ────────────────────────────────────────────────
 
-    def reset_epoch(self, p: int) -> None:
-        """Decay estimates (if p>0), reset visit counts, refresh world paths."""
+    def reset_epoch(self, p: int, world_rng=None) -> None:
+        """Decay estimates (if p>0), reset visit counts, refresh world paths.
+
+        If ``world_rng`` is provided it is used to refresh the world topology;
+        otherwise the agent's own RNG is used. Passing a shared RNG lets a
+        harness keep two agents on identical topologies while their internal
+        RNGs (measurement noise, SA seeds) stay independent.
+        """
         if p > 0:
             self.theta_hat *= self.epoch_decay
             self.phi_hat *= self.epoch_decay
         self._visit_counts = np.zeros((self.world.N, self.world.K), dtype=int)
-        self.world.refresh_epoch(self.rng)
+        self.world.refresh_epoch(world_rng if world_rng is not None else self.rng)
 
     # ─── QUBO construction ──────────────────────────────────────────────
 

@@ -52,9 +52,9 @@ class OracleSA(QAMABPhysical):
         self.theta_hat = world.theta_star.copy()
         self.phi_hat = world.phi_star.copy()
 
-    def reset_epoch(self, p: int) -> None:
+    def reset_epoch(self, p: int, world_rng=None) -> None:
         self._visit_counts = np.zeros((self.world.N, self.world.K), dtype=int)
-        self.world.refresh_epoch(self.rng)
+        self.world.refresh_epoch(world_rng if world_rng is not None else self.rng)
         self.theta_hat = self.world.theta_star.copy()
         self.phi_hat = self.world.phi_star.copy()
 
@@ -77,14 +77,21 @@ def run_one(sigma: float, seed: int):
     rng_qa = np.random.default_rng(seed + 1)
     rng_or = np.random.default_rng(seed + 2)
 
+    # Shared RNG that drives per-epoch world refresh for BOTH agents. Without
+    # this, each agent's reset_epoch() would use its own RNG and resample a
+    # different topology (path memberships, distances), making the regret
+    # measure world-difficulty difference instead of learning gap.
+    shared_world_rng = np.random.default_rng(seed + 50_000)
+
     qa_epoch_mean = np.zeros(P, dtype=float)
     or_epoch_mean = np.zeros(P, dtype=float)
     theta_err = np.zeros(P, dtype=float)
     phi_err = np.zeros(P, dtype=float)
 
     for p in range(P):
-        qa.reset_epoch(p)
-        oracle.reset_epoch(p)
+        epoch_seed = int(shared_world_rng.integers(0, 2**63 - 1))
+        qa.reset_epoch(p, world_rng=np.random.default_rng(epoch_seed))
+        oracle.reset_epoch(p, world_rng=np.random.default_rng(epoch_seed))
 
         qa_losses = []
         or_losses = []
