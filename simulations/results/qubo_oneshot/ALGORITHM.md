@@ -14,15 +14,21 @@ The environment (`NetworkEnvironment` in `simulations/legacy/simulation_core.py`
 
 Each agent picks one route. Let `k_i ∈ {0,…,m−1}` be agent i's choice. Per-flow throughput:
 
-$$U_i(k_1,\dots,k_N) \;=\; B[i, k_i] \;-\; \sum_{j \ne i} I[i, k_i, j, k_j]$$
+```math
+U_i(k_1,\dots,k_N) \;=\; B[i, k_i] \;-\; \sum_{j \ne i} I[i, k_i, j, k_j]
+```
 
 Social welfare:
 
-$$\mathrm{SW}(\mathbf{k}) \;=\; \sum_{i=1}^{N} U_i(\mathbf{k}) \;=\; \sum_{i=1}^{N} B[i,k_i] \;-\; \sum_{i \ne j} I[i,k_i,j,k_j]$$
+```math
+\mathrm{SW}(\mathbf{k}) \;=\; \sum_{i=1}^{N} U_i(\mathbf{k}) \;=\; \sum_{i=1}^{N} B[i,k_i] \;-\; \sum_{i \ne j} I[i,k_i,j,k_j]
+```
 
 The objective is
 
-$$\mathbf{k}^\* \;=\; \arg\max_{\mathbf{k} \in \{0,\dots,m-1\}^N} \mathrm{SW}(\mathbf{k}).$$
+```math
+\mathbf{k}^{*} \;=\; \arg\max_{\mathbf{k} \in \{0,\dots,m-1\}^N} \mathrm{SW}(\mathbf{k}).
+```
 
 This is a combinatorial optimization over `m^N` joint assignments — NP-hard in general (a generalised assignment problem with quadratic interaction).
 
@@ -34,17 +40,23 @@ For reference, at `N=8, m=4` the search space has `4^8 = 65 536` points.
 
 Encode the choice with one binary variable per (agent, route) pair:
 
-$$x_{i,k} \in \{0,1\}, \qquad x_{i,k} = 1 \iff \text{agent } i \text{ uses route } k.$$
+```math
+x_{i,k} \in \{0,1\}, \qquad x_{i,k} = 1 \iff \text{agent } i \text{ uses route } k.
+```
 
 For this to represent a valid assignment we require the **one-hot constraint**
 
-$$\sum_{k=0}^{m-1} x_{i,k} = 1 \quad \forall i \in \{1,\dots,N\}.$$
+```math
+\sum_{k=0}^{m-1} x_{i,k} = 1 \quad \forall i \in \{1,\dots,N\}.
+```
 
 The vector `x ∈ {0,1}^{N·m}` has dimension `Nm`. We index it as `ik := i·m + k`.
 
 Under this encoding, SW rewrites as
 
-$$\mathrm{SW}(x) \;=\; \sum_{i,k} B[i,k]\, x_{i,k} \;-\; \sum_{i \ne j} \sum_{k,l} I[i,k,j,l]\, x_{i,k}\, x_{j,l}.$$
+```math
+\mathrm{SW}(x) \;=\; \sum_{i,k} B[i,k]\, x_{i,k} \;-\; \sum_{i \ne j} \sum_{k,l} I[i,k,j,l]\, x_{i,k}\, x_{j,l}.
+```
 
 ---
 
@@ -52,7 +64,9 @@ $$\mathrm{SW}(x) \;=\; \sum_{i,k} B[i,k]\, x_{i,k} \;-\; \sum_{i \ne j} \sum_{k,
 
 A QUBO ("Quadratic Unconstrained Binary Optimization") is an energy function of the form
 
-$$E(x) \;=\; x^\top Q\, x \;=\; \sum_{a} Q_{a,a}\, x_a \;+\; \sum_{a \ne b} Q_{a,b}\, x_a\, x_b,$$
+```math
+E(x) \;=\; x^\top Q\, x \;=\; \sum_{a} Q_{a,a}\, x_a \;+\; \sum_{a \ne b} Q_{a,b}\, x_a\, x_b,
+```
 
 where `x ∈ {0,1}^d` and we minimise `E`. The trick is to encode both the objective and the constraints into `Q`.
 
@@ -62,13 +76,17 @@ We want to **minimise** energy, but **maximise** SW. So we negate utility. We ha
 
 Maximising `sum_{i,k} B[i,k] x_{i,k}` ⇔ minimising `-sum B[i,k] x_{i,k}`. This is purely diagonal:
 
-$$Q_{ik,ik} \mathrel{+}= -B[i,k]$$
+```math
+Q_{ik,ik} \mathrel{+}= -B[i,k]
+```
 
 ### 3.2 Interference (cross-agent, off-diagonal)
 
 Minimising `-(-sum_{i≠j,k,l} I[i,k,j,l] x_{ik} x_{jl})` = minimising `+sum I[i,k,j,l] x_{ik} x_{jl}`:
 
-$$Q_{ik,\,jl} \mathrel{+}= I[i,k,j,l] \qquad (i \ne j)$$
+```math
+Q_{ik,\,jl} \mathrel{+}= I[i,k,j,l] \qquad (i \ne j)
+```
 
 Note this is intentionally **asymmetric** — we put each `I[i,k,j,l]` once at position `(ik, jl)`, not split between `(ik,jl)` and `(jl,ik)`. The off-diagonal product `x_{ik} x_{jl}` is counted by `Q_{ik,jl} + Q_{jl,ik}` (both fire whenever both bits are 1), so the natural pairing is to place the asymmetric `I[i,k,j,l]` on one side and `I[j,l,i,k]` on the other. They are typically different (interference is not symmetric), and both copies are needed.
 
@@ -81,19 +99,27 @@ for i,k,j,l: Q[ik, jl] = I[i,k,j,l]    # j != i
 
 We have an *unconstrained* binary optimiser; the one-hot constraint needs to be encoded as an energy penalty. The standard way:
 
-$$P_i(x) \;=\; \lambda\,\bigg(\sum_k x_{i,k} - 1\bigg)^2 \;=\; \lambda\,\bigg[\Big(\sum_k x_{i,k}\Big)^2 \;-\; 2\sum_k x_{i,k} \;+\; 1\bigg].$$
+```math
+P_i(x) \;=\; \lambda\,\bigg(\sum_k x_{i,k} - 1\bigg)^2 \;=\; \lambda\,\bigg[\Big(\sum_k x_{i,k}\Big)^2 \;-\; 2\sum_k x_{i,k} \;+\; 1\bigg].
+```
 
 Expanding (since `x_{i,k}^2 = x_{i,k}`):
 
-$$\left(\sum_k x_{i,k}\right)^2 \;=\; \sum_k x_{i,k} \;+\; 2\sum_{k<l} x_{i,k}\,x_{i,l}.$$
+```math
+\left(\sum_k x_{i,k}\right)^2 \;=\; \sum_k x_{i,k} \;+\; 2\sum_{k<l} x_{i,k}\,x_{i,l}.
+```
 
 So
 
-$$P_i(x) \;=\; \lambda\,\bigg[\sum_k x_{i,k} + 2\sum_{k<l} x_{i,k} x_{i,l} - 2\sum_k x_{i,k} + 1\bigg] \;=\; \lambda\,\bigg[-\sum_k x_{i,k} + 2\sum_{k<l} x_{i,k} x_{i,l} + 1\bigg].$$
+```math
+P_i(x) \;=\; \lambda\,\bigg[\sum_k x_{i,k} + 2\sum_{k<l} x_{i,k} x_{i,l} - 2\sum_k x_{i,k} + 1\bigg] \;=\; \lambda\,\bigg[-\sum_k x_{i,k} + 2\sum_{k<l} x_{i,k} x_{i,l} + 1\bigg].
+```
 
 Dropping the constant `+λ`:
 
-$$Q_{ik,ik} \mathrel{+}= -\lambda \qquad \text{and} \qquad Q_{ik,il} \mathrel{+}= +\lambda \quad (k<l)$$
+```math
+Q_{ik,ik} \mathrel{+}= -\lambda \qquad \text{and} \qquad Q_{ik,il} \mathrel{+}= +\lambda \quad (k<l)
+```
 
 In the code we split the penalty symmetrically between `Q[ik,il]` and `Q[il,ik]`, each getting `λ/2`, and put `-λ/2` on the diagonal (because the `-λ` term distributes across both directions). The actual code at `code/diamond_qubo.py:23-39` is:
 
@@ -149,11 +175,15 @@ This always keeps exactly one bit active per agent ⇒ the one-hot constraint is
 
 Naively, recomputing `E(x) = x^T Q x` after every proposal costs `O((Nm)^2)`. Instead we maintain two auxiliary arrays:
 
-$$\mathrm{Q\_row\_sum}[k] \;=\; \sum_{a \in \mathrm{active}} Q[k, a], \qquad \mathrm{Q\_col\_sum}[k] \;=\; \sum_{a \in \mathrm{active}} Q[a, k].$$
+```math
+\mathrm{Q\_row\_sum}[k] \;=\; \sum_{a \in \mathrm{active}} Q[k, a], \qquad \mathrm{Q\_col\_sum}[k] \;=\; \sum_{a \in \mathrm{active}} Q[a, k].
+```
 
 These let us compute the energy change of flipping `old_idx → new_idx` (for the same agent) in O(1):
 
-$$\Delta E \;=\; \big(Q_{\mathrm{diag}}[\mathrm{new}] - Q_{\mathrm{diag}}[\mathrm{old}]\big) \;+\; \big(\mathrm{Q\_row\_sum}[\mathrm{new}] - Q[\mathrm{new},\mathrm{old}]\big) - \big(\mathrm{Q\_row\_sum}[\mathrm{old}] - Q[\mathrm{old},\mathrm{old}]\big) \;+\; \big(\mathrm{Q\_col\_sum}[\mathrm{new}] - Q[\mathrm{old},\mathrm{new}]\big) - \big(\mathrm{Q\_col\_sum}[\mathrm{old}] - Q[\mathrm{old},\mathrm{old}]\big).$$
+```math
+\Delta E \;=\; \big(Q_{\mathrm{diag}}[\mathrm{new}] - Q_{\mathrm{diag}}[\mathrm{old}]\big) \;+\; \big(\mathrm{Q\_row\_sum}[\mathrm{new}] - Q[\mathrm{new},\mathrm{old}]\big) - \big(\mathrm{Q\_row\_sum}[\mathrm{old}] - Q[\mathrm{old},\mathrm{old}]\big) \;+\; \big(\mathrm{Q\_col\_sum}[\mathrm{new}] - Q[\mathrm{old},\mathrm{new}]\big) - \big(\mathrm{Q\_col\_sum}[\mathrm{old}] - Q[\mathrm{old},\mathrm{old}]\big).
+```
 
 The `−Q[new,old]` and `−Q[old,old]` corrections subtract out the rows/cols that involve the bit being flipped (it can't interact with itself). On accept, we update the sums in O(Nm):
 
@@ -182,7 +212,9 @@ else:
 
 We use geometric cooling within each restart:
 
-$$T_{t+1} \;=\; T_t \cdot \text{decay}, \qquad T_0 = T_{\text{start}} \cdot (1 + 0.3\,r),$$
+```math
+T_{t+1} \;=\; T_t \cdot \text{decay}, \qquad T_0 = T_{\text{start}} \cdot (1 + 0.3\,r),
+```
 
 with `T_start = 2.0` and `decay = 0.999`. Each restart `r` slightly raises the initial temperature for diversity. We chose `decay = 0.999` (slow) over the more common `0.95` (fast) so that the 2 000-step run actually explores rather than freezing immediately — slow geometric decay is a practical approximation to log cooling on these timescales.
 
