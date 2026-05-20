@@ -106,19 +106,19 @@ P_i(x) \;=\; \lambda\,\bigg(\sum_k x_{i,k} - 1\bigg)^2 \;=\; \lambda\,\bigg[\Big
 Expanding (since `x_{i,k}^2 = x_{i,k}`):
 
 ```math
-\left(\sum_k x_{i,k}\right)^2 \;=\; \sum_k x_{i,k} \;+\; 2\sum_{k<l} x_{i,k}\,x_{i,l}.
+\left(\sum_k x_{i,k}\right)^2 \;=\; \sum_k x_{i,k} \;+\; 2\sum_{k \lt l} x_{i,k}\,x_{i,l}.
 ```
 
 So
 
 ```math
-P_i(x) \;=\; \lambda\,\bigg[\sum_k x_{i,k} + 2\sum_{k<l} x_{i,k} x_{i,l} - 2\sum_k x_{i,k} + 1\bigg] \;=\; \lambda\,\bigg[-\sum_k x_{i,k} + 2\sum_{k<l} x_{i,k} x_{i,l} + 1\bigg].
+P_i(x) \;=\; \lambda\,\bigg[\sum_k x_{i,k} + 2\sum_{k \lt l} x_{i,k} x_{i,l} - 2\sum_k x_{i,k} + 1\bigg] \;=\; \lambda\,\bigg[-\sum_k x_{i,k} + 2\sum_{k \lt l} x_{i,k} x_{i,l} + 1\bigg].
 ```
 
 Dropping the constant `+λ`:
 
 ```math
-Q_{ik,ik} \mathrel{+}= -\lambda \qquad \text{and} \qquad Q_{ik,il} \mathrel{+}= +\lambda \quad (k<l)
+Q_{ik,ik} \mathrel{+}= -\lambda \qquad \text{and} \qquad Q_{ik,il} \mathrel{+}= +\lambda \quad (k \lt l)
 ```
 
 In the code we split the penalty symmetrically between `Q[ik,il]` and `Q[il,ik]`, each getting `λ/2`, and put `-λ/2` on the diagonal (because the `-λ` term distributes across both directions). The actual code at `code/diamond_qubo.py:23-39` is:
