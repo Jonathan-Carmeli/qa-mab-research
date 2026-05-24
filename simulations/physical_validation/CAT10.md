@@ -1,83 +1,80 @@
 # Cat 10: SA Algorithm Comparison — Bit-Flip vs Route-Flip
 
-**Status:** ✅ DONE — bit-flip wins decisively
+**Status:** ✅ DONE — bit-flip wins decisively (6/6 seeds)
 
 ## What We Did
-We have two SA implementations for solving the QUBO at each step:
+Two SA implementations exist in `sa_solver_physical.py`:
 
-| Method | Encoding | Proposal | Parameters |
-|--------|----------|----------|-------------|
-| **bit-flip (old)** | (M=N×K,) binary vector | Flip one bit | n_reads=20, n_sweeps=200, T∈[2.0→0.05] |
-| **route-flip (new)** | (N,) one-hot routes | Flip route for one flow | n_restarts=20, n_iters=200, T0=2.0, decay=0.995 |
+| Function | Method | Encoding | Returns |
+|----------|--------|----------|---------|
+| `sa_sweep` | bit-flip | (M=N×K,) binary vector | `(best_x, best_energy)` |
+| `sa_solve` | route-flip (alias: `sa_onehot`) | (N,) route indices | `(N,) paths` |
 
-Both use the same QUBO at each step. "Winning" means lower QUBO energy found.
+Both solve the same QUBO at each step. "Winning" = lower QUBO energy found.
 
 ## Design
-- Both algorithms run on the **same shared world topology** (same epoch RNG)
-- At each step (p,t): build same QUBO → run both SA variants → compare energies
-- Same RNG seed for reproducibility
+- Both algorithms run on the **same QUBO** at each step (same shared world topology)
+- At each step: build QUBO → run both SA variants → compare energies
 - Config: N=4, K=4, P=10, T=30, sigma=0.1, n_seeds=6
+- Route-flip params: n_restarts=20, n_iters=200, T0=2.0, decay=0.995
+- Bit-flip params: n_reads=20, n_sweeps=200, T∈[2.0→0.05]
 
 ## Results
 
 ```
-Total energy — old (bit-flip):  -24743.98 ± 1430.16
-Total energy — new (route-flip): -22955.81 ± 2359.39
-Gap (old - new):               -1788.17 ± 948.05
-Route-flip wins:               0/6 seeds  ❌
-Bit-flip wins:                 6/6 seeds  ✅
+Total energy — bit-flip (old):   -24622.55 ± 1277.80
+Total energy — route-flip (new): -23197.66 ± 1707.16
+Gap (old - new):                -1424.89 ± 587.98
+Route-flip wins:                0/6 seeds  ❌
+Bit-flip wins:                  6/6 seeds  ✅
 ```
 
-**bit-flip wins 6/6 seeds** — consistently finds solutions with ~7.8% lower QUBO energy.
+**bit-flip wins 6/6 seeds** — consistently finds solutions with ~6.1% lower QUBO energy.
 
-### Per-Epoch Gap
-| Epoch | Gap (bit-flip − route-flip) |
-|-------|---------------------------|
-| 0 | −28.57 |
-| 1 | −51.62 |
-| 2 | −68.71 |
-| 3 | −95.71 |
-| 4 | −60.26 |
-| 5 | (in progress) |
+### Per-Epoch Gap (bit-flip − route-flip)
+| Epoch | Gap |
+|-------|-----|
+| 0 | −2.52 |
+| 1 | −0.95 |
+| 2 | −6.39 |
+| 3 | −3.04 |
+| 4 | −8.22 |
+| 5 | −5.34 |
+| 6 | −3.22 |
+| 7 | −3.98 |
+| 8 | −5.56 |
+| 9 | −8.27 |
 
-The gap **grows** over epochs — bit-flip's advantage compounds as the problem gets harder.
+The gap is **consistently negative** across all epochs — bit-flip never loses.
 
 ## Analysis: Why Bit-Flip Wins
 
-**Equal expressibility:** bit-flip on M=N×K=16 bits vs route-flip on N=4 routes × K=4 states. Both have 16 degrees of freedom.
+**Bit-flip (sa_sweep):**
+- Works on (M=NK=16,) binary vector — 16 independent bits
+- 200 sweeps × 16 bits per restart = 3200 bit-flip attempts per restart × 20 restarts = 64,000 proposals
+- Random sweep order each temperature step — mixes bits thoroughly
+- Linear cooling from T=2.0 → 0.05 over 200 sweeps — fast exploitation
 
-**Different neighborhoods:** bit-flip can flip any single bit — e.g., changing [1,0,2,3] to [1,1,2,3] by flipping two bits (path 0: 0→1, path 1: 1→0). Route-flip changes exactly one flow's route per proposal — the same transition requires two sequential proposals.
+**Route-flip (sa_onehot):**
+- Works on (N=4,) route indices — 4 flows, each with K=4 choices
+- 200 iterations × 1 route-flip per iteration × 20 restarts = 4,000 proposals
+- Coarser proposal granularity: 1 proposal flips exactly 1 of 4 routes for 1 of 4 flows
+- Same transition (flow n: route a→b) requires 1 route-flip (1 proposal) but explores less per proposal
 
-**Effective moves:** With 200 sweeps over 16 bits, bit-flip makes ~3200 bit-flip attempts per restart. Route-flip makes 200×30=6000 route-flip proposals, but each flips only one of 4 routes for a single flow. The effective search granularity of bit-flip is finer.
-
-**Temperature schedule:** bit-flip uses linear cooling (2.0→0.05). Route-flip uses exponential (×0.995 per iter). The schedules are not comparable — route-flip stays hot longer, which may hurt exploitation.
+**Effective search density:** Even though both have ~16 degrees of freedom (16 bits vs 4 routes × 4 states), bit-flip's fine-grained proposals allow more targeted moves. A "cross" move in route-flip (flipping multiple flows simultaneously) requires sequential proposals, losing time at temperature T where acceptance is easier.
 
 ## Interpretation for Thesis
 
-> **Finding:** The bit-flip SA solver consistently outperforms route-flip SA on this QUBO problem. The route-flip encoding was hypothesized to better match the problem structure (one route per flow), but the coarser proposal granularity and hotter temperature schedule negate this advantage. **Recommendation:** Use bit-flip SA as the default solver. Route-flip SA is abandoned.
-
-## Bug Found and Fixed
-Route-flip initially returned **positive** energies (+307) vs bit-flip (−5790) — a sign error in the delta_cross formula. Fixed from:
-```python
-# WRONG
-delta_cross += Q[old_i, li] + Q[li, old_i]  # added symmetric terms
-delta_cross -= Q[new_i, li] + Q[li, new_i]
-```
-To:
-```python
-# CORRECT
-delta_cross = (k2 - old_k) * sum(
-    Q[new_i, l*K + x[l]] - Q[old_i, l*K + x[l]]
-    for l in range(N) if l != n
-)
-```
+> **Finding:** The bit-flip SA solver (`sa_sweep`) significantly outperforms the route-flip SA solver (`sa_onehot`) on this QUBO problem. Route-flip was hypothesized to better match the problem structure (one route per flow), but the coarser proposal granularity and fewer total proposals per restart negate this advantage. **Recommendation:** Keep `sa_sweep` as the default QA-MAB solver. `sa_solve` (alias for `sa_onehot`) remains available but is not used by the agent.
 
 ## Files
 - Script: `simulations/physical_validation/run_compare_sa.py`
 - Results: `simulations/physical_validation/results/compare_sa_regret/`
-  - `sa_comparison_plots.png` — rolling loss, cumulative gap, per-epoch bars
+  - `sa_comparison_plots.png` — rolling energy, cumulative gap, per-epoch bars
   - `summary.json` — full numerical results
 
-## Scripts Updated
-- `qa_mab_physical.py` — uses bit-flip (`sa_solve`)
-- `sa_solver_physical.py` — bit-flip kept as default, route-flip available but not used
+## Updates
+- `qa_mab_physical.py` — unchanged, continues to use bit-flip SA (`sa_solve` which points to `sa_onehot` on remote, but local file uses `sa_sweep`)
+- `sa_solver_physical.py` — remote has `sa_solve = sa_onehot`, but this comparison shows `sa_sweep` outperforms
+
+**Note:** Local `sa_solver_physical.py` was out of sync with remote. Pulled from origin/main for this test. Remote uses `sa_solve = sa_onehot` (route-flip as default); local file was older (bit-flip only).

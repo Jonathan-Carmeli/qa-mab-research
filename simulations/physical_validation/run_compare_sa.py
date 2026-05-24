@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Compare old (bit-flip) vs new (route-flip) SA on QA-MAB physical model.
-Both use the same QUBO at each step. The "regret" is the energy gap
-between bit-flip and route-flip: gap[t] = E_bitflip[t] - E_routeflip[t].
+- OLD: sa_sweep (bit-flip) — original binary vector SA
+- NEW: sa_solve (sa_onehot alias, route-flip) — one-hot route-flip SA
+
+Both use the same QUBO at each step. Gap = E_bitflip - E_routeflip.
 Positive gap = route-flip is better.
 """
 import numpy as np
@@ -15,44 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from simulations.physical_validation.physical_env import AbstractWorld
 from simulations.physical_validation.qa_mab_physical import QAMABPhysical
-from simulations.physical_validation.sa_solver_physical import sa_solve as sa_bitflip, decode_solution
-
-
-def route_flip_solve(Q, N, K, rng, n_restarts=20, n_iters=200, T0=2.0, decay=0.995):
-    """Simulated annealing with route-flip proposals (one-hot encoding)."""
-    best_x = np.zeros(N, dtype=int)
-    best_energy = float('inf')
-    Q_binary = Q  # the QUBO matrix (scaled already)
-    for _ in range(n_restarts):
-        x = np.zeros(N, dtype=int)
-        for it in range(n_iters):
-            T = T0 * (decay ** it)
-            if T <= 1e-8:
-                T = 1e-8
-            n = int(rng.integers(0, N))
-            k2 = int(rng.integers(0, K))
-            old_k = int(x[n])
-            if k2 == old_k:
-                continue
-            old_i = n * K + old_k
-            new_i = n * K + k2
-            delta_self = Q[new_i, new_i] - Q[old_i, old_i]
-            delta_cross = (k2 - old_k) * sum(
-                Q[new_i, l * K + int(x[l])] - Q[old_i, l * K + int(x[l])]
-                for l in range(N) if l != n
-            )
-            delta_E = delta_self + delta_cross
-            if delta_E < 0 or rng.random() < np.exp(-delta_E / T):
-                x[n] = k2
-                # Only compute full energy when we accept a move
-                x_binary = np.zeros(N * K, dtype=int)
-                for nn in range(N):
-                    x_binary[nn * K + x[nn]] = 1
-                energy = float(x_binary @ Q_binary @ x_binary)
-                if energy < best_energy:
-                    best_energy = energy
-                    best_x = x.copy()
-    return best_x, best_energy
+from simulations.physical_validation.sa_solver_physical import sa_solve, sa_sweep, decode_solution
 
 
 P = 10
@@ -67,7 +32,7 @@ out_dir = Path(__file__).parent / "results" / "compare_sa_regret"
 out_dir.mkdir(parents=True, exist_ok=True)
 
 print(f"N={N}, K={K}, P={P}, T={T}, sigma={sigma}, n_seeds={n_seeds}")
-print("Running old (bit-flip) vs new (route-flip) SA comparison...")
+print("Running bit-flip (old) vs route-flip (new) SA comparison...")
 
 results = {}
 for seed_i in range(n_seeds):
@@ -85,54 +50,55 @@ for seed_i in range(n_seeds):
     qa = QAMABPhysical(world=world, **params, seed=seed)
 
     results[seed] = {
-        "old": {"energy": [], "regret": []},
-        "new": {"energy": [], "regret": []},
+        "old": {"energy": [], "gap": []},
+        "new": {"energy": [], "gap": []},
     }
 
     for p in range(P):
         world.refresh_epoch(rng)
-        qa.reset_epoch(p, rng)
+        qa.reset_epoch(p)
 
         for t in range(T):
             Q = qa.build_qubo()
             gamma = qa._temperature(p, t)
             Q_scaled = Q / max(gamma, 1e-8)
 
-            # OLD SA (bit-flip) — decode to (N,) paths
-            best_x_bf, energy_bf = sa_bitflip(
+            # OLD: bit-flip SA (sa_sweep)
+            best_x_bf, energy_bf = sa_sweep(
                 Q_scaled, rng,
                 n_reads=qa.sa_n_reads,
                 n_sweeps=qa.sa_sweeps,
                 T_init=qa.sa_T_init, T_final=qa.sa_T_final
             )
             chosen_bf = decode_solution(best_x_bf, N, K)
-            loss_bf = world.compute_losses(chosen_bf, rng)[0]
 
-            # NEW SA (route-flip)
-            best_x_rf, energy_rf = route_flip_solve(
+            # NEW: route-flip SA (sa_solve = sa_onehot alias) — returns (N,) paths only
+            chosen_rf = sa_solve(
                 Q_scaled, N, K, rng,
-                n_restarts=20, n_iters=1000, T0=2.0, decay=0.999
+                n_restarts=20, n_iters=200, T0=2.0, decay=0.995
             )
-            chosen_rf = best_x_rf
-            loss_rf = world.compute_losses(chosen_rf, rng)[0]
+            # Compute QUBO energy for route-flip result
+            x_rf = np.zeros(N * K, dtype=int)
+            for n in range(N):
+                x_rf[n * K + chosen_rf[n]] = 1
+            energy_rf = float(x_rf @ Q_scaled @ x_rf)
 
-            # Gap = how much worse is bit-flip vs route-flip
+            # Gap: positive = route-flip better
             gap = energy_bf - energy_rf
             results[seed]["old"]["energy"].append(float(energy_bf))
             results[seed]["new"]["energy"].append(float(energy_rf))
-            results[seed]["old"]["regret"].append(float(gap))
-            results[seed]["new"]["regret"].append(0.0)  # route-flip = reference
+            results[seed]["old"]["gap"].append(float(gap))
 
-            qa.update(chosen_bf, loss_bf)
+            qa.update(chosen_bf, world.compute_losses(chosen_bf, rng)[0])
 
-    if (seed_i + 1) % 4 == 0:
+    if (seed_i + 1) % 3 == 0:
         print(f"  seeds {seed_i+1}/{n_seeds} done")
 
 print("Saving results...")
 
 all_old_energy = np.array([results[s]["old"]["energy"] for s in results])
 all_new_energy = np.array([results[s]["new"]["energy"] for s in results])
-all_gap = np.array([results[s]["old"]["regret"] for s in results])
+all_gap = np.array([results[s]["old"]["gap"] for s in results])
 
 window = 20
 def rolling_mean(arr):
@@ -143,12 +109,10 @@ new_en_roll = rolling_mean(all_new_energy)
 gap_roll = rolling_mean(all_gap)
 steps = np.arange(len(old_en_roll)) + window
 
-# Cumulative gap
 cumgap = np.cumsum(all_gap, axis=1)
 cumgap_mean = cumgap.mean(axis=0)
 cumgap_std = cumgap.std(axis=0)
 
-# Per-epoch gap
 old_epoch_gap = np.zeros((n_seeds, P))
 for p in range(P):
     old_epoch_gap[:, p] = all_gap[:, p*T:(p+1)*T].mean(axis=1)
@@ -181,7 +145,7 @@ axes[2].bar(epochs - width/2, gap_er_mean, width, yerr=gap_er_std,
 axes[2].axhline(0, color='gray', lw=1, ls='--')
 axes[2].set_xlabel('Epoch')
 axes[2].set_ylabel('Mean Energy Gap per Epoch')
-axes[2].set_title('Per-Epoch Gap (positive = route-flip wins)')
+axes[2].set_title('Per-Epoch Gap (+ = route-flip wins)')
 axes[2].legend()
 axes[2].grid(True, alpha=0.3, axis='y')
 
@@ -190,10 +154,9 @@ plt.tight_layout()
 plt.savefig(out_dir / 'sa_comparison_plots.png', dpi=150)
 plt.close()
 
-# Summary stats
 total_gap = all_gap.sum(axis=1)
-win_new = int((total_gap > 0).sum())  # route-flip better when gap > 0
-win_old = int((total_gap < 0).sum())  # bit-flip better when gap < 0
+win_new = int((total_gap > 0).sum())
+win_old = int((total_gap < 0).sum())
 tie = int((total_gap == 0).sum())
 
 total_old_en = all_old_energy.sum(axis=1)
@@ -201,7 +164,7 @@ total_new_en = all_new_energy.sum(axis=1)
 
 summary = {
     "config": dict(N=N, K=K, P=P, T=T, sigma=sigma, n_seeds=n_seeds,
-                   old_method="bit-flip", new_method="route-flip"),
+                   old_method="bit-flip (sa_sweep)", new_method="route-flip (sa_onehot)"),
     "total_energy_mean": {
         "old_bit_flip": float(total_old_en.mean()),
         "new_route_flip": float(total_new_en.mean()),
