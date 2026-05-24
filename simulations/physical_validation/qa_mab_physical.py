@@ -53,17 +53,22 @@ class QAMABPhysical:
         self.phi_hat = np.zeros(world.Z, dtype=float)
         self._visit_counts = None
 
-    # ─── Epoch lifecycle ────────────────────────────────────────────────
+    # ─── Epoch lifecycle ─────────────────────────────────────────────────────
 
-    def reset_epoch(self, p: int) -> None:
-        """Decay estimates (if p>0), reset visit counts, refresh world paths."""
+    def reset_epoch(self, p: int, world_rng=None) -> None:
+        """Decay estimates (if p>0), reset visit counts, refresh world paths.
+
+        world_rng: if supplied, world.refresh_epoch uses this RNG so the
+        runner can give every agent the same topology for epoch p.
+        Falls back to self.rng when None.
+        """
         if p > 0:
             self.theta_hat *= self.epoch_decay
             self.phi_hat *= self.epoch_decay
         self._visit_counts = np.zeros((self.world.N, self.world.K), dtype=int)
-        self.world.refresh_epoch(self.rng)
+        self.world.refresh_epoch(world_rng if world_rng is not None else self.rng)
 
-    # ─── QUBO construction ──────────────────────────────────────────────
+    # ─── QUBO construction ──────────────────────────────────────────────────
 
     def build_qubo(self) -> np.ndarray:
         """Build (M,M) QUBO matrix where M=N*K."""
@@ -81,7 +86,7 @@ class QAMABPhysical:
 
                 cost = float(self.theta_hat[uav_mask].sum()) + float(self.phi_hat[zone_mask].sum())
                 visits = self._visit_counts[n, k]
-                ucb_bonus = self.ucb_c / np.sqrt(max(visits, 1))
+                ucb_bonus = self.ucb_c / np.sqrt(max(visits, 1e-6))
                 Q[i, i] = cost - self.lam - ucb_bonus
 
         # Same-flow one-hot penalty
@@ -115,7 +120,7 @@ class QAMABPhysical:
 
         return Q
 
-    # ─── Action & update ────────────────────────────────────────────────
+    # ─── Action & update ────────────────────────────────────────────────────
 
     def _temperature(self, p: int, t: int) -> float:
         return self.gamma_0 / (((p + 1) ** self.a) * ((t + 1) ** self.b))
@@ -172,17 +177,24 @@ class QAMABPhysical:
                 b = l * K + kl
                 prox[n] += np.exp(-ps.pair_min_dist[a, b] / self.d0)
 
-        # Fault-only residual loss
+        # Fault-only residual loss (allow negatives — noise signal)
         L_fault = losses - self.C_coll * collision_counts - prox
-        L_fault = np.maximum(L_fault, 0.0)
 
         # Residual credit assignment
+        num_uavs = np.array(
+            [int(ps.path_uav_membership[n, chosen_paths[n]].sum()) for n in range(N)],
+            dtype=float,
+        )
+
         for n in range(N):
             k = chosen_paths[n]
             uav_mask = ps.path_uav_membership[n, k]
             zone_mask = ps.path_zone_membership[n, k]
 
-            observed = float(L_fault[n])
+            # Divide total fault loss by number of UAVs on path to avoid
+            # inflating each UAV's individual contribution.
+            denom = max(num_uavs[n], 1.0)
+            observed = float(L_fault[n]) / denom
 
             # UAVs — first pass
             theta_contrib = float(self.theta_hat[uav_mask].sum())
@@ -202,7 +214,7 @@ class QAMABPhysical:
         np.clip(self.theta_hat, 0.0, 1.0, out=self.theta_hat)
         np.clip(self.phi_hat,   0.0, 1.0, out=self.phi_hat)
 
-    # ─── Full run ───────────────────────────────────────────────────────
+    # ─── Full run ─────────────────────────────────────────────────────────
 
     def run(self, P: int, T: int, rng=None) -> dict:
         """Run P epochs × T steps. Returns dict of logs."""
