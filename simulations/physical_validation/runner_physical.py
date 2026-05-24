@@ -1,5 +1,4 @@
 """Experiment runner for physical abstract model."""
-import os
 import numpy as np
 from .physical_env import AbstractWorld
 from .qa_mab_physical import QAMABPhysical
@@ -13,7 +12,18 @@ def run_experiment(
     agents=None,
     **kwargs
 ):
-    """Run all agents on the same seeds/world for comparison."""
+    """Run all agents on the same seeds/world for comparison.
+
+    Every agent receives:
+    - an identical AbstractWorld (same θ*/φ* drawn from the same seed)
+    - the same world topology at every epoch (shared deterministic epoch seeds)
+    - the same loss-noise sequence (fresh per-agent rng from the same seed)
+
+    Previously agents shared one world object and each used their own RNG
+    for world.refresh_epoch, so they saw different topologies. NB3R and
+    Random never refreshed the world at all. Both issues invalidated
+    cross-agent loss comparisons.
+    """
     if agents is None:
         agents = ["QA-MAB-Physical", "NB3R-Physical", "Random-Physical", "Oracle-Physical", "Optimal-Physical"]
 
@@ -28,30 +38,44 @@ def run_experiment(
 
     for seed_idx in range(n_seeds):
         seed = base_seed + seed_idx
-        rng = np.random.default_rng(seed)
 
-        # Shared world per seed
-        world = AbstractWorld(N=N, K=K, m=m, Z=Z, seed=seed, **kwargs)
+        # One deterministic world-topology seed per epoch, shared across all agents.
+        # Multiplier keeps these far from agent/loss seed space.
+        epoch_seeds = [seed * 100_000 + p for p in range(P)]
 
         for name in agents:
             if name not in agent_map:
                 continue
-            factory = agent_map[name]
-            agent = factory(world, seed)
+
+            # Fresh world per agent: same θ*/φ* (same seed), independent internal RNG
+            # so one agent's reset_epoch calls cannot advance another agent's world state.
+            world = AbstractWorld(N=N, K=K, m=m, Z=Z, seed=seed, **kwargs)
+            agent = agent_map[name](world, seed)
 
             losses_log = np.zeros((P, T, N), dtype=float)
             theta_err_log = np.zeros(P, dtype=float)
             phi_err_log = np.zeros(P, dtype=float)
             chosen_log = np.zeros((P, T, N), dtype=int)
 
-            rng_ep = np.random.default_rng(seed + 1000 + seed_idx)
+            # Fresh loss RNG per agent with the same base seed — same noise pattern.
+            rng_ep = np.random.default_rng(seed + 1_000_000)
+
             for p in range(P):
-                if hasattr(agent, 'reset_epoch'):
-                    # QA-MAB / Oracle / Optimal
-                    if hasattr(agent, 'world'):
-                        agent.reset_epoch(p)
-                    else:
+                # Build a fresh world RNG from the shared epoch seed so every
+                # agent sees the identical path topology at epoch p.
+                world_rng = np.random.default_rng(epoch_seeds[p])
+
+                if hasattr(agent, 'world'):
+                    # QAMABPhysical subclasses: reset_epoch handles decay +
+                    # visit-count reset + world refresh.
+                    agent.reset_epoch(p, world_rng=world_rng)
+                else:
+                    # NB3R / Random: no internal state to decay, but the world
+                    # topology must still be refreshed for each epoch.
+                    if hasattr(agent, 'reset_epoch'):
                         agent.reset_epoch()
+                    world.refresh_epoch(world_rng)
+
                 for t in range(T):
                     chosen = agent.act(t, p)
                     losses = world.compute_losses(chosen, rng_ep)
