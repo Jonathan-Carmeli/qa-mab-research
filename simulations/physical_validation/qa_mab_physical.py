@@ -4,7 +4,7 @@ Residual credit assignment + epoch decay + temperature-scaled QUBO + SA solver.
 """
 import numpy as np
 from .physical_env import AbstractWorld
-from .sa_solver_physical import sa_solve, decode_solution
+from .sa_solver_physical import sa_sweep, decode_solution
 
 
 class QAMABPhysical:
@@ -55,13 +55,21 @@ class QAMABPhysical:
 
     # ─── Epoch lifecycle ────────────────────────────────────────────────
 
-    def reset_epoch(self, p: int) -> None:
-        """Decay estimates (if p>0), reset visit counts, refresh world paths."""
+    def reset_epoch(self, p: int, world_rng=None) -> None:
+        """Decay estimates (if p>0), reset visit counts, refresh world paths.
+
+        Parameters
+        ----------
+        p          : epoch index
+        world_rng  : optional shared RNG for world refresh.
+                     If None, uses self.rng (legacy behavior).
+        """
         if p > 0:
             self.theta_hat *= self.epoch_decay
             self.phi_hat *= self.epoch_decay
         self._visit_counts = np.zeros((self.world.N, self.world.K), dtype=int)
-        self.world.refresh_epoch(self.rng)
+        rng = self.rng if world_rng is None else world_rng
+        self.world.refresh_epoch(rng)
 
     # ─── QUBO construction ──────────────────────────────────────────────
 
@@ -81,7 +89,7 @@ class QAMABPhysical:
 
                 cost = float(self.theta_hat[uav_mask].sum()) + float(self.phi_hat[zone_mask].sum())
                 visits = self._visit_counts[n, k]
-                ucb_bonus = self.ucb_c / np.sqrt(max(visits, 1))
+                ucb_bonus = self.ucb_c / np.sqrt(max(visits, 1e-6))  # BUG D FIX: visits=0 now gets 1/sqrt(1e-6) instead of 1/sqrt(1)
                 Q[i, i] = cost - self.lam - ucb_bonus
 
         # Same-flow one-hot penalty
@@ -126,7 +134,7 @@ class QAMABPhysical:
         gamma = self._temperature(p, t)
         Q_scaled = Q / max(gamma, 1e-8)
 
-        best_x, _ = sa_solve(
+        best_x, _ = sa_sweep(
             Q_scaled,
             self.rng,
             n_reads=self.sa_n_reads,
@@ -172,8 +180,12 @@ class QAMABPhysical:
                 prox[n] += np.exp(-ps.pair_min_dist[a, b] / self.d0)
 
         # Fault-only residual loss
+        # BUG C FIX: removed np.maximum(L_fault, 0.0)
+        # Previously: negative fault losses (from noise) were floored to 0.
+        # This masked the sign of noise at high sigma.
+        # Now we allow L_fault to be negative, which correctly propagates
+        # noise signal through the residual credit assignment.
         L_fault = losses - self.C_coll * collision_counts - prox
-        L_fault = np.maximum(L_fault, 0.0)
 
         # Residual credit assignment
         for n in range(N):
@@ -181,21 +193,29 @@ class QAMABPhysical:
             uav_mask = ps.path_uav_membership[n, k]
             zone_mask = ps.path_zone_membership[n, k]
 
+            # BUG A FIX: observed is the per-flow fault loss.
+            # It must be split across the UAVs (and zones) in the path.
+            # Each UAV gets 1/num_uavs of the loss (fair credit assignment).
             observed = float(L_fault[n])
+            num_uavs = uav_mask.sum()
+            num_zones = zone_mask.sum()
+            per_uav_loss = observed / max(num_uavs, 1)
+            per_zone_loss = observed / max(num_zones, 1)
 
             # UAVs — first pass
             theta_contrib = float(self.theta_hat[uav_mask].sum())
             phi_contrib = float(self.phi_hat[zone_mask].sum())
             for i in np.where(uav_mask)[0]:
                 other_theta = theta_contrib - self.theta_hat[i]
-                residual_i = observed - other_theta - phi_contrib
+                # Correct: each UAV absorbs per_uav_loss, not full observed
+                residual_i = per_uav_loss - other_theta - phi_contrib
                 self.theta_hat[i] += self.alpha * (residual_i - self.theta_hat[i])
 
             # Zones — after UAV updates (more accurate phi estimate)
             theta_contrib = float(self.theta_hat[uav_mask].sum())
             for z in np.where(zone_mask)[0]:
                 other_phi = float(self.phi_hat[zone_mask].sum()) - self.phi_hat[z]
-                residual_z = observed - theta_contrib - other_phi
+                residual_z = per_zone_loss - theta_contrib - other_phi
                 self.phi_hat[z] += self.alpha * (residual_z - self.phi_hat[z])
 
         np.clip(self.theta_hat, 0.0, 1.0, out=self.theta_hat)

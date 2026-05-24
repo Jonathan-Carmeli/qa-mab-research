@@ -141,14 +141,15 @@ def sa_sweep(Q, rng, n_reads=20, n_sweeps=200, T_init=2.0, T_final=0.05):
     return best_x, best_energy
 
 
-def decode_solution(x, N, K):
+def decode_solution(x, N, K, rng=None):
     """Decode binary solution vector to chosen paths.
 
     Parameters
     ----------
-    x : (M=N*K,) binary array
-    N : number of flows
-    K : number of paths per flow
+    x   : (M=N*K,) binary array
+    N   : number of flows
+    K   : number of paths per flow
+    rng : optional numpy Generator (BUG B FIX: random fallback instead of 0)
 
     Returns
     -------
@@ -158,7 +159,8 @@ def decode_solution(x, N, K):
     for n in range(N):
         segment = x[n * K:(n + 1) * K]
         if segment.sum() == 0:
-            chosen[n] = 0
+            # BUG B FIX: random fallback instead of deterministic path[0]=0
+            chosen[n] = int(rng.integers(0, K)) if rng is not None else 0
         else:
             chosen[n] = int(np.argmax(segment))
     return chosen

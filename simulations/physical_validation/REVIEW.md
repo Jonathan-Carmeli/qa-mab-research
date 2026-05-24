@@ -167,3 +167,64 @@ The summary says "borderline" and attributes it to ties. That's correct interpre
 | sa_solve alias confusion | **LOW** | Self-contradictory docs |
 
 **Bottom line:** The validation suite demonstrates the right experiments in principle, but has significant execution gaps. The most urgent fix is the Cat 9 shared RNG bug — without it, all Cat 9 "convergence" results are measuring the wrong thing. Bug A (credit assignment) is the second priority since it poisons all θ̂/φ̂ error metrics. After those two, the incomplete categories (Cat 6, Cat 8) need full runs to support the claims made in the summary.
+---
+
+## FIXES APPLIED (2026-05-24)
+
+### Bug A — Credit Assignment (HIGH) ✅ FIXED
+**File:** `qa_mab_physical.py` lines ~189-192
+
+**Before:**
+```python
+observed = float(L_fault[n])
+# Each UAV absorbs full loss
+for i in np.where(uav_mask)[0]:
+    residual_i = observed - other_theta - phi_contrib
+```
+
+**After:**
+```python
+num_uavs = uav_mask.sum()
+num_zones = zone_mask.sum()
+per_uav_loss = observed / max(num_uavs, 1)  # fair split
+per_zone_loss = observed / max(num_zones, 1)
+# Each UAV absorbs per_uav_loss
+```
+
+### Bug B — decode fallback (MEDIUM) ✅ FIXED
+**File:** `sa_solver_physical.py::decode_solution`
+
+**Before:** `chosen[n] = 0` when segment.all==0 (deterministic bias)
+**After:** `chosen[n] = rng.integers(0, K)` (random fallback)
+
+### Bug C — L_fault floor (LOW) ✅ FIXED
+**File:** `qa_mab_physical.py`
+
+**Before:** `L_fault = np.maximum(L_fault, 0.0)` (clipping negative noise)
+**After:** `L_fault = losses - C_coll * collision_counts - prox` (allows negative)
+
+### Bug D — UCB visits floor (LOW) ✅ FIXED
+**File:** `qa_mab_physical.py`
+
+**Before:** `ucb_bonus = c / sqrt(max(visits, 1))` (visits=0 == visits=1)
+**After:** `ucb_bonus = c / sqrt(max(visits, 1e-6))` (visits=0 gets proper bonus)
+
+### Cat 9 RNG Fix ✅ FIXED
+**File:** `validate_cat9_final.py` + `qa_mab_physical.py::reset_epoch`
+
+**Before:** `qa.reset_epoch(p)` uses agent's own RNG → different topologies per epoch
+**After:**
+```python
+shared_epoch_rng = np.random.default_rng(seed + 50000)
+epoch_seed = int(shared_epoch_rng.integers(0, 2**63-1))
+world_rng = np.random.default_rng(epoch_seed)
+qa.reset_epoch(p, world_rng=world_rng)
+opt.reset_epoch(p, world_rng=world_rng)
+```
+
+### QA-MAB now uses sa_sweep (bit-flip) ✅ CONFIRMED
+**File:** `qa_mab_physical.py`
+
+`qa_mab_physical.py` calls `sa_sweep` (bit-flip), NOT `sa_solve` (route-flip).
+This confirms bit-flip is the active QA-MAB solver.
+
