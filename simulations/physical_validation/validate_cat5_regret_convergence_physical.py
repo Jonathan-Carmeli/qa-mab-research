@@ -5,21 +5,22 @@ Run with more seeds for statistical significance.
 P=5, T=100 per seed. 5 seeds per N. Full N range.
 """
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
-import json, os
+import json
 from scipy import stats
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import csv
 
 OUT = "simulations/results/validation_cat5_physical/"
 os.makedirs(OUT, exist_ok=True)
 
-from simulations.physical_env import AbstractWorld
-from simulations.qa_mab_physical import QAMABPhysical
-from simulations.agents_physical import NB3RAgent
+from simulations.physical_validation.physical_env import AbstractWorld
+from simulations.physical_validation.qa_mab_physical import QAMABPhysical
+from simulations.physical_validation.agents_physical import NB3RAgent
 
 N_vals = [5, 8, 10, 12, 15, 20, 30]
 P, T, n_seeds = 5, 100, 5
@@ -35,15 +36,20 @@ for N in N_vals:
         rng2 = np.random.default_rng(seed + 1000)
 
         world = AbstractWorld(N=N, K=4, m=20, Z=6, seed=seed)
-        qa   = QAMABPhysical(world, seed=seed)
-        nb3  = NB3RAgent(world, seed=seed)
+        qa    = QAMABPhysical(world, seed=seed)
+        nb3   = NB3RAgent(world, seed=seed)
 
         qa_losses = []; nb3_losses = []
 
         for p in range(P):
-            qa.reset_epoch(p); nb3.reset_epoch()
+            # Shared deterministic topology: qa.reset_epoch refreshes the world
+            # with the canonical epoch seed; nb3.reset_epoch() leaves the world
+            # untouched, so both agents see the same pathset.
+            epoch_seed = seed * 100_000 + p
+            qa.reset_epoch(p, world_rng=np.random.default_rng(epoch_seed))
+            nb3.reset_epoch()
             for t in range(T):
-                c_qa = qa.act(t, p); l_qa = world.compute_losses(c_qa, rng)
+                c_qa = qa.act(t, p);  l_qa = world.compute_losses(c_qa, rng)
                 qa.update(c_qa, l_qa); qa_losses.append(l_qa.mean())
                 c_nb = nb3.act(t, p); l_nb = world.compute_losses(c_nb, rng2)
                 nb3.update(c_nb, l_nb); nb3_losses.append(l_nb.mean())
@@ -63,33 +69,37 @@ for N in N_vals:
         crossover_N = N
 
 pass_cat5 = crossover_N is not None
-result = {"pass": pass_cat5, "reason": f"Crossover at N={crossover_N}: {'PASS' if pass_cat5 else 'FAIL'}",
-          "crossover_N": crossover_N, "rows": rows}
-
+result = {
+    "pass": pass_cat5,
+    "reason": f"Crossover at N={crossover_N}: {'PASS' if pass_cat5 else 'FAIL'}",
+    "crossover_N": crossover_N,
+    "rows": rows,
+}
 with open(OUT + "result.json", "w") as f:
     json.dump(result, f, indent=2)
 
-import csv
 with open(OUT + "result.csv", "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=["N","qa_mean","nb3r_mean","win_rate","p_value"])
+    w = csv.DictWriter(f, fieldnames=["N", "qa_mean", "nb3r_mean", "win_rate", "p_value"])
     w.writeheader(); w.writerows(rows)
 
 N_plot = [r["N"] for r in rows]
-wr = [r["win_rate"] for r in rows]
+wr     = [r["win_rate"] for r in rows]
 plt.figure(figsize=(8, 4))
 plt.plot(N_plot, wr, marker='o', color='tab:blue', lw=2)
-plt.axhline(0.80, color='tab:red', linestyle='--', label='80% threshold')
-plt.axhline(0.50, color='gray', linestyle=':', label='50%')
-plt.xlabel("N flows"); plt.ylabel("QA-MAB win rate"); plt.title("QA-MAB vs NB3R: Crossover Analysis")
+plt.axhline(0.80, color='tab:red',  linestyle='--', label='80% threshold')
+plt.axhline(0.50, color='gray',     linestyle=':',  label='50%')
+plt.xlabel("N flows"); plt.ylabel("QA-MAB win rate")
+plt.title("QA-MAB vs NB3R: Crossover Analysis")
 plt.legend(); plt.grid(True, alpha=0.3)
 plt.savefig(OUT + "win_rate.png", dpi=150); plt.close()
 
-plt.figure(figsize=(8, 4))
 x = np.arange(len(N_plot))
-plt.plot(x, [r["qa_mean"] for r in rows], marker='o', label='QA-MAB')
+plt.figure(figsize=(8, 4))
+plt.plot(x, [r["qa_mean"]   for r in rows], marker='o', label='QA-MAB')
 plt.plot(x, [r["nb3r_mean"] for r in rows], marker='s', label='NB3R')
 plt.xticks(x, N_plot); plt.xlabel("N flows"); plt.ylabel("Mean Final Loss")
-plt.title("QA-MAB vs NB3R: Mean Loss"); plt.legend(); plt.grid(True, alpha=0.3)
+plt.title("QA-MAB vs NB3R: Mean Loss")
+plt.legend(); plt.grid(True, alpha=0.3)
 plt.savefig(OUT + "mean_loss.png", dpi=150); plt.close()
 
 print(f"Cat 5: crossover_N={crossover_N} — {'PASS' if pass_cat5 else 'FAIL'}")
