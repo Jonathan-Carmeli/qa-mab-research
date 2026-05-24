@@ -13,7 +13,7 @@ import numpy as np
 import json, os, itertools
 from simulations.physical_env import AbstractWorld
 from simulations.qa_mab_physical import QAMABPhysical
-from simulations.sa_solver_physical import sa_solve, decode_solution
+from simulations.sa_solver_physical import sa_solve
 
 OUT = "simulations/results/validation_cat3_physical/"
 os.makedirs(OUT, exist_ok=True)
@@ -36,8 +36,8 @@ def brute_force_best(Q, N, K):
     return best_E
 
 n_seeds = 30
-SA_N_READS = 50   # More reads = better SA convergence (20 reads gives ~70%, 50 gives ~83%)
-SA_SWEEPS = 500   # More sweeps = better convergence
+SA_N_RESTARTS = 50   # Route-flip: 50 restarts × 2000 iters per restart
+SA_N_ITERS = 2000    # Steps per restart (geometric decay, route-flip guaranteed valid)
 
 exact_hits = 0
 gaps = []
@@ -54,8 +54,7 @@ for i in range(n_seeds):
     Q = agent.build_qubo()
     bf_E = brute_force_best(Q, 3, 3)
 
-    sa_x, _ = sa_solve(Q, rng, n_reads=SA_N_READS, n_sweeps=SA_SWEEPS, T_init=2.0, T_final=0.05)
-    sa_paths = decode_solution(sa_x, 3, 3)
+    sa_paths = sa_solve(Q, 3, 3, rng, n_restarts=SA_N_RESTARTS, n_iters=SA_N_ITERS)
     sa_E = qubo_energy(Q, sa_paths, 3, 3)
 
     gap = sa_E - bf_E
@@ -71,7 +70,7 @@ result = {
     "reason": f"{exact_hits}/{n_seeds} exact (rate={rate:.1%}, {'PASS' if pass_cat3 else 'FAIL'}, threshold 70%)",
     "n_seeds": n_seeds, "n_exact": exact_hits, "win_rate": rate,
     "mean_gap": float(np.mean(gaps)), "std_gap": float(np.std(gaps)),
-    "sa_config": {"n_reads": SA_N_READS, "n_sweeps": SA_SWEEPS},
+    "sa_config": {"n_restarts": SA_N_RESTARTS, "n_iters": SA_N_ITERS},
 }
 
 with open(OUT + "result.json", "w") as f:

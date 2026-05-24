@@ -4,7 +4,7 @@ Residual credit assignment + epoch decay + temperature-scaled QUBO + SA solver.
 """
 import numpy as np
 from .physical_env import AbstractWorld
-from .sa_solver_physical import sa_solve, decode_solution
+from .sa_solver_physical import sa_solve
 
 
 class QAMABPhysical:
@@ -25,10 +25,10 @@ class QAMABPhysical:
         gamma_0: float = 2.0,
         a: float = 0.5,
         b: float = 0.3,
-        sa_sweeps: int = 200,
-        sa_n_reads: int = 20,
-        sa_T_init: float = 2.0,
-        sa_T_final: float = 0.05,
+        sa_n_restarts: int = 20,
+        sa_n_iters: int = 1000,
+        sa_T0: float = 2.0,
+        sa_decay: float = 0.999,
         seed: int = 42,
     ):
         self.world = world
@@ -42,10 +42,10 @@ class QAMABPhysical:
         self.gamma_0 = gamma_0
         self.a = a
         self.b = b
-        self.sa_sweeps = sa_sweeps
-        self.sa_n_reads = sa_n_reads
-        self.sa_T_init = sa_T_init
-        self.sa_T_final = sa_T_final
+        self.sa_n_restarts = sa_n_restarts
+        self.sa_n_iters = sa_n_iters
+        self.sa_T0 = sa_T0
+        self.sa_decay = sa_decay
         self.seed = seed
 
         self.rng = np.random.default_rng(seed)
@@ -126,15 +126,16 @@ class QAMABPhysical:
         gamma = self._temperature(p, t)
         Q_scaled = Q / max(gamma, 1e-8)
 
-        best_x, _ = sa_solve(
+        return sa_solve(
             Q_scaled,
+            self.world.N,
+            self.world.K,
             self.rng,
-            n_reads=self.sa_n_reads,
-            n_sweeps=self.sa_sweeps,
-            T_init=self.sa_T_init,
-            T_final=self.sa_T_final,
+            n_restarts=self.sa_n_restarts,
+            n_iters=self.sa_n_iters,
+            T0=self.sa_T0,
+            decay=self.sa_decay,
         )
-        return decode_solution(best_x, self.world.N, self.world.K)
 
     def update(self, chosen_paths: np.ndarray, losses: np.ndarray) -> None:
         """Residual credit assignment for θ̂ and φ̂."""

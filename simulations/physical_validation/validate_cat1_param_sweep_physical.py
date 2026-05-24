@@ -13,10 +13,10 @@ os.makedirs(OUT, exist_ok=True)
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def run_qamab(N, K, m, Z, ucb_c, epoch_decay, sa_sweeps, sa_n_reads, seed):
+def run_qamab(N, K, m, Z, ucb_c, epoch_decay, sa_n_restarts, sa_n_iters, seed):
     world = AbstractWorld(N=N, K=K, m=m, Z=Z, seed=seed)
     agent = QAMABPhysical(world, ucb_c=ucb_c, epoch_decay=epoch_decay,
-                          sa_sweeps=sa_sweeps, sa_n_reads=sa_n_reads, seed=seed)
+                          sa_n_restarts=sa_n_restarts, sa_n_iters=sa_n_iters, seed=seed)
     rng = np.random.default_rng(seed)
     P, T = 10, 50
     losses_log = np.zeros((P, T, N))
@@ -40,7 +40,7 @@ for ucb in ucb_vals:
     t0 = time.time()
     for s in range(10):
         loss, err = run_qamab(N=10, K=4, m=20, Z=6, ucb_c=ucb, epoch_decay=0.7,
-                               sa_sweeps=200, sa_n_reads=20, seed=42+s)
+                               sa_n_restarts=20, sa_n_iters=1000, seed=42+s)
         losses.append(loss)
         errors.append(err)
     elapsed = (time.time() - t0) / 10
@@ -55,7 +55,7 @@ for dec in decay_vals:
     losses, errors = [], []
     for s in range(10):
         loss, err = run_qamab(N=10, K=4, m=20, Z=6, ucb_c=3.0, epoch_decay=dec,
-                               sa_sweeps=200, sa_n_reads=20, seed=42+s)
+                               sa_n_restarts=20, sa_n_iters=1000, seed=42+s)
         losses.append(loss)
         errors.append(err)
     decay_results[dec] = {"mean_loss": float(np.mean(losses)), "std_loss": float(np.std(losses)),
@@ -63,19 +63,19 @@ for dec in decay_vals:
     print(f"  decay={dec}: loss={np.mean(losses):.4f}  theta_err={np.mean(errors):.4f}")
 
 # ── Sweep 3: SA effort ──────────────────────────────────────────────────────
-sa_vals = [50, 100, 200, 500]
+sa_vals = [500, 1000, 2000, 5000]
 sa_results = {}
-for sweeps in sa_vals:
+for iters in sa_vals:
     losses, elapsed = [], []
     for s in range(10):
         t0 = time.time()
         loss, _ = run_qamab(N=10, K=4, m=20, Z=6, ucb_c=3.0, epoch_decay=0.7,
-                             sa_sweeps=sweeps, sa_n_reads=10, seed=42+s)
+                             sa_n_restarts=10, sa_n_iters=iters, seed=42+s)
         losses.append(loss)
         elapsed.append(time.time() - t0)
-    sa_results[sweeps] = {"mean_loss": float(np.mean(losses)), "std_loss": float(np.std(losses)),
-                          "mean_elapsed": float(np.mean(elapsed))}
-    print(f"  sa_sweeps={sweeps}: loss={np.mean(losses):.4f}  time={np.mean(elapsed):.2f}s")
+    sa_results[iters] = {"mean_loss": float(np.mean(losses)), "std_loss": float(np.std(losses)),
+                         "mean_elapsed": float(np.mean(elapsed))}
+    print(f"  sa_n_iters={iters}: loss={np.mean(losses):.4f}  time={np.mean(elapsed):.2f}s")
 
 # ── PASS check ───────────────────────────────────────────────────────────────
 best_ucb_loss = min(ucb_results[u]["mean_loss"] for u in ucb_vals)
@@ -93,7 +93,7 @@ result = {
     "ucb_results": ucb_results,
     "decay_results": decay_results,
     "sa_results": sa_results,
-    "recommended": {"ucb_c": 3.0, "epoch_decay": best_decay, "sa_sweeps": best_sa},
+    "recommended": {"ucb_c": 3.0, "epoch_decay": best_decay, "sa_n_iters": best_sa},
 }
 
 with open(OUT + "result.json", "w") as f:
@@ -112,10 +112,10 @@ with open(OUT + "sweep_decay.csv", "w", newline="") as f:
     for d, v in decay_results.items():
         w.writerow({"decay": d, **v})
 with open(OUT + "sweep_sa.csv", "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=["sa_sweeps","mean_loss","std_loss","mean_elapsed"])
+    w = csv.DictWriter(f, fieldnames=["sa_n_iters","mean_loss","std_loss","mean_elapsed"])
     w.writeheader()
     for s, v in sa_results.items():
-        w.writerow({"sa_sweeps": s, **v})
+        w.writerow({"sa_n_iters": s, **v})
 
 # PNGs
 import matplotlib
@@ -139,8 +139,8 @@ plt.savefig(OUT + "sweep_decay.png"); plt.close()
 x_sa = [s for s in sa_vals]
 y_sa = [sa_results[s]["mean_loss"] for s in sa_vals]
 plt.figure(); plt.plot(x_sa, y_sa, marker='o')
-plt.xlabel('sa_sweeps'); plt.ylabel('Mean Final Loss'); plt.title('SA Sweeps Sweep')
+plt.xlabel('sa_n_iters'); plt.ylabel('Mean Final Loss'); plt.title('SA Iters Sweep')
 plt.savefig(OUT + "sweep_sa.png"); plt.close()
 
 print(f"\nCat 1 PASS={pass_cat1} — UCB improvement={ucb_improvement:.1%}")
-print(f"Recommended: ucb_c=3.0, epoch_decay={best_decay}, sa_sweeps={best_sa}")
+print(f"Recommended: ucb_c=3.0, epoch_decay={best_decay}, sa_n_iters={best_sa}")

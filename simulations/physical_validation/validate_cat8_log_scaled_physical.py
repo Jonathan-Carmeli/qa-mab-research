@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 
 from simulations.physical_validation.physical_env import AbstractWorld
 from simulations.physical_validation.qa_mab_physical import QAMABPhysical
-from simulations.physical_validation.sa_solver_physical import sa_solve, decode_solution
+from simulations.physical_validation.sa_solver_physical import sa_solve
 
 OUT = "simulations/results/validation_cat8_physical/"
 
@@ -39,15 +39,16 @@ class QAMABLogScaled(QAMABPhysical):
         Q = self.build_qubo()
         scale = 1.0 + np.log(t + 1)
         Q_scaled = Q * scale
-        best_x, _ = sa_solve(
+        return sa_solve(
             Q_scaled,
+            self.world.N,
+            self.world.K,
             self.rng,
-            n_reads=self.sa_n_reads,
-            n_sweeps=self.sa_sweeps,
-            T_init=self.sa_T_init,
-            T_final=self.sa_T_final,
+            n_restarts=self.sa_n_restarts,
+            n_iters=self.sa_n_iters,
+            T0=self.sa_T0,
+            decay=self.sa_decay,
         )
-        return decode_solution(best_x, self.world.N, self.world.K)
 
 
 def main(N_vals=None, P=5, T=100, n_seeds=10):
