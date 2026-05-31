@@ -1,0 +1,39 @@
+{
+  "config": {
+    "N": 4,
+    "K": 4,
+    "P": 10,
+    "T": 30,
+    "sigma": 0.1,
+    "n_seeds": 6,
+    "old_method": "bit-flip (sa_sweep)",
+    "new_method": "route-flip (sa_onehot)"
+  },
+  "total_energy_mean": {
+    "old_bit_flip": -24622.54842760862,
+    "new_route_flip": -23197.65567687752
+  },
+  "total_energy_std": {
+    "old_bit_flip": 1277.802503411883,
+    "new_route_flip": 1707.1552410729535
+  },
+  "gap_mean": -1424.8927507310957,
+  "gap_std": 587.9834076918645,
+  "win_rate": {
+    "new_route_flip_lower_energy": "0/6 seeds",
+    "old_bit_flip_lower_energy": "6/6 seeds",
+    "tie": "0/6 seeds"
+  },
+  "per_epoch_gap_mean": [
+    -2.5211789661652526,
+    -0.950461759824698,
+    -6.393340210285616,
+    -3.04142573777513,
+    -8.217888345899077,
+    -5.342067727547653,
+    -3.2173465884166195,
+    -3.9813309181973104,
+    -5.558155438690964,
+    -8.273229331567546
+  ]
+}
