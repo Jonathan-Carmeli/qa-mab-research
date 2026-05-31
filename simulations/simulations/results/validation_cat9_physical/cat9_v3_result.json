@@ -1,0 +1,29 @@
+{
+  "category": 9,
+  "test": "partial_regret_convergence_vs_oraclesa",
+  "pass": false,
+  "config": {
+    "N": 10,
+    "P": 30,
+    "T": 200,
+    "n_seeds": 10,
+    "sigmas": [
+      0.0,
+      0.1
+    ]
+  },
+  "per_sigma": {
+    "0.0": {
+      "init_regret_mean": 0.2761625641014525,
+      "mid_regret_mean": 0.5499578958806107,
+      "final_regret_mean": 0.46828853731228837,
+      "regret_reduction": -0.19212597321083585
+    },
+    "0.1": {
+      "init_regret_mean": 0.29667992182789793,
+      "mid_regret_mean": 0.5563406493788867,
+      "final_regret_mean": 0.48235580294848085,
+      "regret_reduction": -0.18567588112058284
+    }
+  }
+}
